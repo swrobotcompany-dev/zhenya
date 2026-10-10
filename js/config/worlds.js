@@ -1,0 +1,31 @@
+// Конфигурация трёх игровых миров (палитры, физика, эффекты)
+const WORLDS={
+ classic:{ name:'Обыкновенный лес',
+  zen:0x4f9fe0, mid:0x9fd0f2, hor:0xffe9c9, glow:0xfff2c8, glowDir:[40,70,30],
+  fog:0xe8f0e8, fogD:.012, ground:0x79a85c,
+  sun:0xfff1cf, sunI:1.6, amb:0x9fb8c8, ambI:.7, hemiS:0xcfe8ff, hemiG:0x89a86b, hemiI:.75,
+  trunk:0x8a6248, leaves:[0x5fae5a,0x74c163,0x4f9e52,0x8cd07a], grass:0x8fc46a,
+  fruit:0xe63b3b, fruitEm:0x901515, halo:[255,90,90],
+  spirit:0x40544a, spiritEye:0xffffff, spiritLight:0xc8ffe0,
+  clouds:0xffffff, starCount:0, float:'seed', extra:'flowers',
+  drone:.018, wind:.05, droplets:true, birds:true, chimes:false, rustle:false },
+ magic:{ name:'Лунный сад',
+  zen:0x1b1f52, mid:0x3d3a8c, hor:0x8577dd, glow:0xaeb8ff, glowDir:[-70,55,-170],
+  fog:0x34306e, fogD:.02, ground:0x3a3670,
+  sun:0x9fb4ff, sunI:1.25, amb:0x4a4a8f, ambI:.85, hemiS:0x6a6ad8, hemiG:0x2a2450, hemiI:.85,
+  trunk:0x2e2660, leaves:[0x4a3f9e,0x5b4fc0,0x3d3590,0x6a5ed8], grass:0x44407e,
+  fruit:0x8f7bff, fruitEm:0x3a25b0, halo:[130,205,255],
+  spirit:0x1a1440, spiritEye:0x9ff0ff, spiritLight:0x54f0ff,
+  clouds:0x2e2a60, starCount:500, float:'spore', extra:'shrooms',
+  drone:.05, wind:.04, droplets:false, birds:false, chimes:true, rustle:false },
+ autumn:{ name:'Золотая поляна',
+  zen:0x6b4f9e, mid:0xe08a6a, hor:0xffd9a0, glow:0xffd98a, glowDir:[-60,25,-80],
+  fog:0xf5d4ac, fogD:.014, ground:0xb07a45,
+  sun:0xffc27a, sunI:1.55, amb:0xc9a08a, ambI:.7, hemiS:0xffd9b0, hemiG:0x8a5a3a, hemiI:.8,
+  trunk:0x6a4632, leaves:[0xe8923a,0xf0b040,0xd86a3a,0xf5c85a], grass:0xc89a55,
+  fruit:0xffc23a, fruitEm:0xa06a00, halo:[255,215,95],
+  spirit:0x4a3020, spiritEye:0xffe08a, spiritLight:0xffc86a,
+  clouds:0xf0c8a0, starCount:60, float:'leaf', extra:'fireflies',
+  drone:.03, wind:.06, droplets:false, birds:false, chimes:false, rustle:true }
+};
+let W=WORLDS.classic;
