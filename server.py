@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FORBIDDEN FRUIT — сервер для игры по локальной сети (без внешних зависимостей).
+FORBIDDEN FRUIT — ОДИН сервер для игры по локальной сети (без зависимостей).
 
-WebSocket-порт (по умолчанию 8765) — синхронизирует игроков
-(общие плоды, портал, дух тумана, позиции лисят).
+Команда:  python3 server.py [порт]      (по умолчанию порт 8000)
 
-Запуск:
-  python3 server.py                      # только WebSocket-сервер
-  python3 server.py --ws-port 8765       # с другим портом
-  python3 serve_game.py                  # вторая программа: раздача игры по HTTP (порт 8000)
-
-Игроки открывают в браузере: http://IP-сервера:8000
+Тот же порт раздаёт и игру, и синхронизацию:
+  Игроки открывают в браузере:  http://IP-сервера:8000
+  Клиенты сами подключаются по WebSocket на этот же адрес/порт.
+Никаких вторых процессов и отдельных адресов — все заходят на IP сервера.
 """
 import argparse
 import asyncio
@@ -19,17 +16,34 @@ import base64
 import hashlib
 import json
 import os
+import re
 import socket
 import struct
 import sys
 import threading
 import time
 from collections import deque
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-WS_PORT_DEFAULT = 8765
+PORT_DEFAULT = 8000
 GUID_MAGIC = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 OP_TEXT, OP_BIN, OP_CLOSE, OP_PING, OP_PONG = 0x1, 0x2, 0x8, 0x9, 0xA
+
+MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8", ".json": "application/json",
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".ico": "image/x-icon",
+        ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav"}
+
+
+def unquote(s):
+    from urllib.parse import unquote as _u
+    try:
+        return _u(s)
+    except Exception:
+        return s
 
 
 # ============================ СОСТОЯНИЕ ИГРЫ ==============================
@@ -41,7 +55,8 @@ class GameState:
         self.players = {}          # ws -> {"id":..,"name":..,"team":..,...}
         self.next_id = 1
         self.seq = 0
-        self.events = deque(maxlen=64)   # [(server_time, evt), ...]
+        self.events = deque(maxlen=64)   # [(ts, evt), ...] — evt содержит "seq"
+        self.worlds_seen = set()
         self.reset("classic")
         self.last_tick = time.monotonic()
         self.spirit_spawned_at = None
@@ -80,7 +95,7 @@ class GameState:
                 "team": int(d.get("team", 0)) % 4,
                 "x": 0.0, "z": 0.0, "yaw": 0.0, "sprint": False,
                 "hearts": self.hearts_per_player, "alive": True,
-                "evt_mark": time.time(),   # клиент увидит события, случившиеся после входа
+                "evt_seq": self.seq,        # клиент увидит события, случившиеся после входа
             }
             self.ev("join", id=pid, name=self.players[ws]["name"], team=self.players[ws]["team"])
             return pid
@@ -128,6 +143,8 @@ class GameState:
             return await self._portal(ws, msg)
         if t == "spirit":
             return await self._spirit(msg)
+        if t == "newworld":
+            return await self._newworld(ws, msg)
         if t == "restart":
             return await self._restart(msg)
         return None
@@ -198,10 +215,25 @@ class GameState:
             self.ev("restart", world=key)
             return None
 
+    async def _newworld(self, ws, msg):
+        """Хост выбирает мир из меню — все игроки перезаходят в него."""
+        async with self.lock:
+            key = str(msg.get("world", "classic"))
+            if key not in WORLDS:
+                key = "classic"
+            self.reset(key)
+            for p in self.players.values():
+                p["hearts"] = self.hearts_per_player
+                p["alive"] = True
+                p["x"] = 0.0
+                p["z"] = 0.0
+            self.ev("newworld", world=key, by=ws.id if hasattr(ws, "id") else 0)
+            return None
+
     # ----- снапшот для рассылки -----
-    def snapshot(self, mark=None):
-        """mark=None — «сырые» новые события (для hello);
-        иначе — события после метки клиента (выдаём один раз и не теряем)."""
+    def snapshot(self, after_seq=None):
+        """after_seq=None — все известные события (для hello);
+        иначе — только события с seq > after_seq (выдаём один раз и не теряем)."""
         players = []
         for p in self.players.values():
             players.append({
@@ -209,12 +241,10 @@ class GameState:
                 "x": round(p["x"], 2), "z": round(p["z"], 2), "yaw": round(p["yaw"], 2),
                 "sprint": p["sprint"], "hearts": p["hearts"], "alive": p["alive"],
             })
-        if mark is None:                       # режим hello
-            new_evts = [e for e in self.events if e[0] > self.snapshot_mark]
-            for ts, e in new_evts:
-                self.snapshot_mark = max(self.snapshot_mark, ts)
-        else:                                  # режим клиента: выдаём всё после его метки
-            new_evts = [e for e in self.events if e[0] > mark]
+        if after_seq is None:
+            new_evts = list(self.events)
+        else:
+            new_evts = [e for e in self.events if e[1]["seq"] > after_seq]
         return {
             "t": "state",
             "world": self.world,
@@ -225,6 +255,7 @@ class GameState:
             "spirit": {"state": self.spirit_state},
             "players": players,
             "evts": [[round(ts, 3), e] for ts, e in new_evts][-16:],
+            "seq": self.seq,
             "clock": time.time(),
         }
 
@@ -240,7 +271,6 @@ class GameState:
         self.spirit_die_t = None
         self.spirit_respawn_at = None
         self.events.clear()
-        self.snapshot_mark = 0.0
 
 
 WORLDS = {"classic", "magic", "autumn"}
@@ -285,8 +315,9 @@ class WSProtocol(asyncio.Protocol):
 
     # ---------- handshake ----------
     def _try_handshake(self):
+        """True — это WebSocket; False — обычный HTTP (раздать файлы); None — ждать данных."""
         if b"\r\n\r\n" not in self.buf:
-            return False
+            return None
         head, rest = self.buf.split(b"\r\n\r\n", 1)
         self.buf = rest
         try:
@@ -297,12 +328,14 @@ class WSProtocol(asyncio.Protocol):
                     k, v = line.split(":", 1)
                     fields[k.strip().lower()] = v.strip()
             key = fields.get("sec-websocket-key")
-            if not key:
-                raise ValueError("no key")
+            upgrade = fields.get("upgrade", "")
+            if not key or "websocket" not in upgrade.lower():
+                self._serve_http(head)          # браузер открыл игру по http://
+                return False
         except Exception:
             self.transport.write(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
             self.transport.close()
-            return True  # буфер уже «потреблён», дальше не трогаем
+            return False
         accept = ws_accept(key.encode("latin-1"))
         self.transport.write(
             ("HTTP/1.1 101 Switching Protocols\r\n"
@@ -311,11 +344,55 @@ class WSProtocol(asyncio.Protocol):
         self.handshaked = True
         return True
 
+    # ---------- обычный HTTP: раздача файлов игры с этого же порта ----------
+    def _serve_http(self, head_bytes):
+        """Не WebSocket-запрос — раздаём файлы игры (тот же порт)."""
+        try:
+            lines = head_bytes.decode("latin-1").split("\r\n")
+            method, path, _proto = lines[0].split(" ", 2)
+        except Exception:
+            self.transport.write(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
+            self.transport.close()
+            return
+        if method.upper() not in ("GET", "HEAD"):
+            self.transport.write(b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n")
+            self.transport.close()
+            return
+        rel = unquote(path.split("?", 1)[0].split("#", 1)[0])
+        if rel in ("/", ""):
+            rel = "/index.html"
+        full = os.path.normpath(os.path.join(ROOT, rel.lstrip("/")))
+        data, ctype = None, "text/html; charset=utf-8"
+        try:
+            if os.path.isfile(full) and full.startswith(ROOT):
+                ext = os.path.splitext(full)[1].lower()
+                ctype = MIME.get(ext, "application/octet-stream")
+                with open(full, "rb") as fh:
+                    data = fh.read()
+            elif os.path.isdir(full) and os.path.isfile(os.path.join(full, "index.html")):
+                with open(os.path.join(full, "index.html"), "rb") as fh:
+                    data = fh.read()
+        except Exception:
+            data = None
+        if data is None:
+            body = "404 — здесь только лес и плоды ✦".encode("utf-8")
+            self.transport.write(
+                b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\n"
+                b"Content-Length: " + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
+            self.transport.close()
+            return
+        self.transport.write(
+            ("HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\n"
+             "Cache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\n"
+             "Connection: close\r\n\r\n" % (ctype, len(data)).encode("latin-1")) + data)
+        self.transport.close()
+
     # ---------- данные ----------
     def data_received(self, data):
         self.buf += data
         if not self.handshaked:
-            if not self._try_handshake():
+            res = self._try_handshake()
+            if res is not True:      # None — ждать ещё; False — HTTP уже обработан
                 return
         while self.handshaked and not self.closed:
             parsed = self._parse_frame()
@@ -403,11 +480,11 @@ async def broadcaster():
             if ws.closed:
                 dead.append(ws)
                 continue
-            mark = GAME.players[ws].get("evt_mark", 0.0)
-            snap = GAME.snapshot(mark=mark)
+            after = GAME.players[ws].get("evt_seq", 0)
+            snap = GAME.snapshot(after_seq=after)
             if snap["evts"]:
                 # сдвигаем метку клиента — эти события он уже получил
-                GAME.players[ws]["evt_mark"] = max(e[0] for e in _events_after(mark))
+                GAME.players[ws]["evt_seq"] = max(e[1]["seq"] for e in snap["evts"])
             ws._send_raw(encode_frame(json.dumps(snap, ensure_ascii=False, separators=(",", ":"))))
         for ws in dead:
             GAME.players.pop(ws, None)
@@ -415,10 +492,6 @@ async def broadcaster():
         if GAME.spirit_state == "die" and GAME.spirit_respawn_at and time.monotonic() > GAME.spirit_respawn_at:
             GAME.spirit_state = "lurk"
         await asyncio.sleep(max(0.0, 0.1 - (time.monotonic() - t0)))
-
-
-def _events_after(mark):
-    return [e for e in GAME.events if e[0] > mark]
 
 
 # ============================ ТОЧКА ВХОДА =================================
@@ -434,24 +507,34 @@ def get_lan_ip():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Сетевой сервер FORBIDDEN FRUIT (WebSocket)")
+    ap = argparse.ArgumentParser(
+        description="Сетевой сервер FORBIDDEN FRUIT: игра + синхронизация на одном порту")
+    ap.add_argument("port", nargs="?", type=int, default=None,
+                    help="порт (по умолчанию 8000). Можно также: python3 server.py --port 9000")
     ap.add_argument("--host", default="0.0.0.0", help="адрес (по умолчанию все интерфейсы)")
-    ap.add_argument("--ws-port", type=int, default=WS_PORT_DEFAULT, help="WebSocket-порт (по умолчанию 8765)")
+    ap.add_argument("--port", dest="port_opt", type=int, default=None,
+                    help="то же, что позиционный аргумент")
     args = ap.parse_args()
+    port = args.port if args.port is not None else (args.port_opt or PORT_DEFAULT)
 
     async def amain():
         loop = asyncio.get_running_loop()
-        ws_srv = await loop.create_server(lambda: WSProtocol(loop), args.host, args.ws_port)
+        ws_srv = await loop.create_server(lambda: WSProtocol(loop), args.host, port)
         print("=" * 62)
-        print("  FORBIDDEN FRUIT — сетевой сервер запущен ✦")
-        print(f"  Синхронизация игроков:  ws://{get_lan_ip()}:{args.ws_port}")
+        print("  FORBIDDEN FRUIT — сервер запущен ✦ (игра и сеть на одном порту)")
         print("")
-        print("  Не забудьте также запустить раздачу игры:")
-        print(f"     python3 serve_game.py   (http://IP-сервера:8000)")
-        print("  Игроки в локальной сети открывают адрес выше,")
-        print("  выбирают «Сетевую игру» и вводят IP этого компьютера.")
+        print(f"  Игроки открывают в браузере:   http://{get_lan_ip()}:{port}")
+        print(f"  На этом компьютере:           http://localhost:{port}")
+        print("")
+        print("  Друзья в локальной сети заходят по ссылке выше и жмут")
+        print("  «🌐 Сетевая игра» — адрес сервера подставится сам.")
         print("  Ctrl+C — остановить сервер.")
         print("=" * 62)
+        try:
+            import webbrowser
+            webbrowser.open(f"http://localhost:{port}")
+        except Exception:
+            pass
         broad = asyncio.ensure_future(broadcaster())
         try:
             await asyncio.Event().wait()   # вечный цикл событий
