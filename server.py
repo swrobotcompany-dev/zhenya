@@ -126,6 +126,11 @@ class GameState:
         t = msg.get("t")
         if t == "join":
             await self.join(ws, msg)
+            # если игрок пришёл сразу с выбором мира и он отличается от общего —
+            # перестраиваем общий мир под него (остальные увидят newworld в снапшоте)
+            want = str(msg.get("world") or "")
+            if want and want != self.world and want in WORLDS:
+                await self.set_world(want)
             # сразу отправляем приветствие с полным снимком мира —
             # клиент построит лес по тем же плодам, что и у всех
             snap = self.snapshot()
@@ -145,6 +150,8 @@ class GameState:
             return await self._spirit(msg)
         if t == "newworld":
             return await self._newworld(ws, msg)
+        if t == "setworld":
+            return await self.set_world(str(msg.get("world", "classic")))
         if t == "restart":
             return await self._restart(msg)
         return None
@@ -272,6 +279,23 @@ class GameState:
         self.spirit_respawn_at = None
         self.events.clear()
 
+    async def set_world(self, key):
+        """Смена мира из меню: если мир уже общий — просто подтверждаем
+        (клиент всё равно построит лес по снимку), иначе — полный рестарт."""
+        async with self.lock:
+            if key not in WORLDS:
+                key = "classic"
+            if self.world == key and self.state != "over":
+                return {"t": "worldok", "world": key}
+            self.reset(key)
+            for p in self.players.values():
+                p["hearts"] = self.hearts_per_player
+                p["alive"] = True
+                p["x"] = 0.0
+                p["z"] = 0.0
+            self.ev("newworld", world=key)
+            return {"t": "worldok", "world": key}
+
 
 WORLDS = {"classic", "magic", "autumn"}
 GAME = GameState()
@@ -303,6 +327,7 @@ class WSProtocol(asyncio.Protocol):
         self.transport = None
         self.buf = b""
         self.handshaked = False
+        self.http_only = False
         self.closed = False
         self.is_server_side = True
 
@@ -311,7 +336,8 @@ class WSProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.closed = True
-        asyncio.ensure_future(GAME.leave(self))
+        if self.handshaked:                     # HTTP-запросы сюда не доходят — не трогать игру
+            asyncio.ensure_future(GAME.leave(self))
 
     # ---------- handshake ----------
     def _try_handshake(self):
@@ -330,6 +356,7 @@ class WSProtocol(asyncio.Protocol):
             key = fields.get("sec-websocket-key")
             upgrade = fields.get("upgrade", "")
             if not key or "websocket" not in upgrade.lower():
+                self.http_only = True           # обычный запрос: раздать файлы и закрыть
                 self._serve_http(head)          # браузер открыл игру по http://
                 return False
         except Exception:
@@ -389,6 +416,8 @@ class WSProtocol(asyncio.Protocol):
 
     # ---------- данные ----------
     def data_received(self, data):
+        if getattr(self, "http_only", False):
+            return                              # соединение уже закрывается после ответа
         self.buf += data
         if not self.handshaked:
             res = self._try_handshake()
