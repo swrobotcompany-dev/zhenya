@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forbidden Fruit — сетевая игра про лисят</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div id="hearts">♥ ♥ ♥</div>
+      <div id="fruit-counter">🍎 0 / 7</div>
+    </div>
+    <div class="hud-right">
+      <div id="net-status" class="hidden">🟢 игроков: 1</div>
+      <div id="world-name"></div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <!-- Стартовый экран -->
+  <div id="menu-screen" class="screen">
+    <h1>🦊 FORBIDDEN FRUIT</h1>
+    <p class="tagline">Соберите запретные плоды вместе с друзьями в общем лесу</p>
+    <div class="menu-buttons">
+      <button id="btn-solo" class="btn primary">▶ Одиночная игра</button>
+      <button id="btn-net" class="btn secondary">🌐 Сетевая игра</button>
+    </div>
+    <p class="hint">WASD/стрелки — движение · Shift — бег · Пробел — прыжок/рывок · E — собрать · F — удар · P — пауза</p>
+  </div>
+
+  <!-- Лобби (сетевой режим). Поле адреса отсутствует: сервер берётся из ссылки автоматически -->
+  <div id="lobby-screen" class="screen hidden">
+    <h2>🌐 Сетевая прогулка</h2>
+    <p class="tagline">Все подключаются к одному адресу — <span id="lobby-addr-label"></span></p>
+    <label class="field">Имя лисёнка
+      <input id="lbName" maxlength="16" placeholder="например, Рыжик">
+    </label>
+    <div class="field">Цвет команды
+      <div id="lbTeams" class="teams">
+        <button class="team red selected" data-team="red">Рыжий</button>
+        <button class="team sand" data-team="sand">Песочный</button>
+        <button class="team silver" data-team="silver">Серебристый</button>
+        <button class="team coal" data-team="coal">Угольный</button>
+      </div>
+    </div>
+    <div class="field">Мир
+      <select id="lbWorld">
+        <option value="meadow">Луговина</option>
+        <option value="hollow">Дупло</option>
+        <option value="mistfen">Туманное болото</option>
+      </select>
+    </div>
+    <button id="btn-join" class="btn primary">Подключиться</button>
+    <p id="lobby-msg" class="hint"></p>
+    <button id="btn-back-menu" class="btn ghost">← Назад</button>
+  </div>
+
+  <!-- Финальный экран -->
+  <div id="final-screen" class="screen hidden">
+    <h2 id="final-title">Победа! 🏆</h2>
+    <p id="final-text"></p>
+    <div class="menu-buttons">
+      <button id="btn-final-restart" class="btn primary">новая прогулка</button>
+      <button id="btn-final-menu" class="btn ghost">в меню</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/main.js"></script>
+<script src="js/net/net-client.js"></script>
+</body>
+</html>

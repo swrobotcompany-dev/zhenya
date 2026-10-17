@@ -1,0 +1,57 @@
+/* Forbidden Fruit — оформление меню, лобби и HUD */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #17251d; font-family: "Segoe UI", system-ui, sans-serif; color: #f2ead9; }
+#app { position: relative; width: 100vw; height: 100vh; }
+#game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hidden { display: none !important; }
+
+.screen {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; text-align: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(46, 78, 56, .96), rgba(16, 26, 20, .98));
+}
+.screen h1 { font-size: clamp(34px, 7vw, 64px); letter-spacing: 2px; text-shadow: 0 4px 24px rgba(232, 118, 58, .45); }
+.screen h2 { font-size: clamp(24px, 4vw, 40px); }
+.tagline { opacity: .85; max-width: 560px; }
+.hint { font-size: 13px; opacity: .6; max-width: 620px; }
+
+.menu-buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.btn {
+  cursor: pointer; border: none; border-radius: 14px; padding: 14px 30px;
+  font-size: 18px; font-weight: 600; color: #fff; transition: transform .12s, filter .12s;
+}
+.btn:hover { transform: translateY(-2px); filter: brightness(1.12); }
+.btn.primary { background: linear-gradient(160deg, #e8763a, #c2542a); box-shadow: 0 6px 22px rgba(232, 118, 58, .4); }
+.btn.secondary { background: linear-gradient(160deg, #3f7d5a, #2b5a40); box-shadow: 0 6px 22px rgba(63, 125, 90, .35); }
+.btn.ghost { background: transparent; border: 2px solid rgba(242, 234, 217, .35); color: #f2ead9; }
+
+/* Лобби */
+#lobby-screen { gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 8px; font-size: 15px; opacity: .95; }
+.field input, .field select {
+  min-width: 320px; padding: 10px 14px; border-radius: 10px; border: 2px solid rgba(242,234,217,.25);
+  background: rgba(12, 20, 15, .6); color: #f2ead9; font-size: 16px; outline: none;
+}
+.field input:focus, .field select:focus { border-color: #e8763a; }
+.teams { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.team { cursor: pointer; border-radius: 12px; padding: 10px 16px; font-size: 15px; font-weight: 600; color: #17251d; border: 3px solid transparent; }
+.team.selected { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+.team.red { background: #e8763a; } .team.sand { background: #e8c07a; }
+.team.silver { background: #b9c4cf; } .team.coal { background: #4a4f5a; color: #f2ead9; }
+
+/* HUD */
+#hud { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.hud-left { position: absolute; top: 16px; left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 20px; text-shadow: 0 2px 8px #000; }
+#hearts { color: #ff6b6b; letter-spacing: 4px; }
+.hud-right { position: absolute; top: 16px; right: 18px; text-align: right; font-size: 15px; text-shadow: 0 2px 8px #000; }
+#net-status { color: #9fe8b9; }
+#toast {
+  position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%);
+  background: rgba(14, 24, 18, .85); border: 1px solid rgba(242,234,217,.25);
+  padding: 10px 22px; border-radius: 12px; font-size: 16px; opacity: 0; transition: opacity .3s;
+  max-width: 80vw;
+}
+#toast.show { opacity: 1; }
+#final-screen .menu-buttons { pointer-events: auto; }
