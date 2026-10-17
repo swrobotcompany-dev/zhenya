@@ -171,6 +171,7 @@ function animate(){
     updateAmbient(dt);
     if(G.state==='play'){
       updateFox(dt);updateSpirit(dt);updatePortal(dt);
+      if(typeof NET!=='undefined'&&NET.on)updateRemoteFoxes(dt);
       for(let i=0;i<fruitsArr.length;i++){const fr=fruitsArr[i];if(!fr.alive)continue;
         fr.hang.rotation.z=Math.sin(G.t*1.1+fr.ph)*.14;
         fr.f.rotation.y+=dt*1.5;

@@ -60,11 +60,29 @@
     </div>
     <div class="m-controls"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> или стрелки — движение · <span class="key">SHIFT</span><span class="key">SPACE</span> — ускорение · <span class="key">P</span> — пауза</div>
     <div class="m-note">🎧 со звуком нежнее · стрелка над лисёнком укажет путь к плоду</div>
+    <button id="netBtn" class="btn-net">🌐 Сетевая игра — вместе с друзьями</button>
+  </div>
+</div>
+
+<div id="lobby">
+  <div class="lobby-in">
+    <h2>Сетевая игра</h2>
+    <p class="lobby-sub">Лес один на всех: плоды, портал и дух тумана общие.<br>Сервер запускается командой <b>python3 server.py</b> (см. README).</p>
+    <label>Ваше имя<input id="lbName" maxlength="16" placeholder="Лисёнок"></label>
+    <label>Адрес сервера<input id="lbAddr" placeholder="192.168.1.5 (IP компьютера с сервером)">
+      <small>или host:port, например 192.168.1.5:8765</small></label>
+    <div class="lobby-row"><span>Цвет лисёнка:</span><span id="lbTeams"></span></div>
+    <div class="lobby-btns">
+      <button class="btn btn-sm" id="lbJoin">Подключиться</button>
+      <button class="btn btn-sm ghost" id="lbBack">Назад</button>
+    </div>
+    <div id="lbStatus"></div>
+    <div id="lbPlayers"></div>
   </div>
 </div>
 
 <div id="pause"><div class="big">Пауза</div><div class="sub">Лисёнок присел отдохнуть. [P] — продолжить</div></div>
-<div id="end"><div class="big" id="endTitle"></div><div class="sub" id="endText"></div><button class="btn" onclick="location.reload()">Выбрать другой мир</button></div>
+<div id="end"><div class="big" id="endTitle"></div><div class="sub" id="endText"></div><button class="btn" id="endBtn">Выбрать другой мир</button></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -106,6 +124,9 @@ else{
 <!-- Логика и игровой цикл -->
 <script src="js/core/game-logic.js"></script>
 <script src="js/core/game-loop.js"></script>
+
+<!-- Сетевой режим (локальная сеть) -->
+<script src="js/net/net-client.js"></script>
 
 <!-- Точка входа -->
 <script src="js/main.js"></script>
