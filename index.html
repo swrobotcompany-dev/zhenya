@@ -3,136 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FORBIDDEN FRUIT — семь плодов</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<title>Forbidden Fruit — сетевая игра про лисят</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<div id="app">
+  <canvas id="game"></canvas>
 
-<div id="stage"></div>
-<div id="vig" class="fx"></div>
-<div id="near" class="fx"></div>
-<div id="flash" class="fx"></div>
-<div id="errBox"></div>
-
-<div id="hud">
-  <div class="hud-top">
-    <div class="pill"><div class="hud-label">Плоды</div>
-      <div id="fruitBox"><span class="orb"></span><span id="fruitCt">0</span> <b>/ 7</b></div></div>
-    <div class="pill"><div class="hud-label">Лисёнок</div><div id="hearts"></div></div>
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div id="hearts">♥ ♥ ♥</div>
+      <div id="fruit-counter">🍎 0 / 7</div>
+    </div>
+    <div class="hud-right">
+      <div id="net-status" class="hidden">🟢 игроков: 1</div>
+      <div id="world-name"></div>
+    </div>
+    <div id="toast"></div>
   </div>
-  <div id="goal"><div class="hud-label">Цель</div><div id="goalText">Соберите 7 плодов, чтобы открыть портал домой</div></div>
-  <div id="hint"></div>
-  <div id="ctrlHint">WASD / стрелки — идти &nbsp;·&nbsp; <b>SHIFT / ПРОБЕЛ</b> — ускориться &nbsp;·&nbsp; M — звук</div>
-  <div id="stamWrap"><div class="bar"><div id="stam"></div></div></div>
-</div>
-<div id="loc"></div>
 
-<div id="menu">
-  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
-  <div class="menu-in">
-    <div class="m-eyebrow">маленькое приключение</div>
-    <h1>FORBIDDEN <span>FRUIT</span></h1>
-    <p class="m-sub">Лисёнок забрёл далеко от дома. Соберите <b>семь волшебных плодов</b> — их лучи света видно издалека — чтобы открыть <b>портал домой</b> в центре поляны. И не дайте духу тумана себя догнать. Выберите мир:</p>
-    <div class="cards">
-      <div class="card" data-w="classic" style="--cc:#5fae5a">
-        <div class="prev" style="background:linear-gradient(180deg,#8fd0ff,#d8f0d0)">
-          <div class="sun" style="background:#fff3b8"></div>
-          <svg class="sil" viewBox="0 0 270 44" preserveAspectRatio="none"><path d="M0 44 L0 30 Q20 18 40 28 Q55 8 78 26 Q95 16 112 28 Q135 10 160 27 Q180 18 198 29 Q220 14 244 28 L270 24 L270 44 Z" fill="#6ab264"/></svg>
-        </div>
-        <div class="body"><h3>Обыкновенный лес</h3><p>Тёплый полдень, зелёные кроны, цветы в траве и птицы. Самый уютный мир для первой прогулки.</p><div class="go">→ войти</div></div>
-      </div>
-      <div class="card" data-w="magic" style="--cc:#7f6fd8">
-        <div class="prev" style="background:linear-gradient(180deg,#252a68,#7a68d8)">
-          <div class="sun" style="background:#e8ecff"></div>
-          <svg class="sil" viewBox="0 0 270 44" preserveAspectRatio="none"><path d="M0 44 L0 30 Q20 18 40 28 Q55 8 78 26 Q95 16 112 28 Q135 10 160 27 Q180 18 198 29 Q220 14 244 28 L270 24 L270 44 Z" fill="#4a3f9e"/></svg>
-        </div>
-        <div class="body"><h3>Лунный сад</h3><p>Фиолетово-голубая ночь. Светящиеся грибы, голубые споры в воздухе и звёзды совсем близко.</p><div class="go">→ войти</div></div>
-      </div>
-      <div class="card" data-w="autumn" style="--cc:#e8923a">
-        <div class="prev" style="background:linear-gradient(180deg,#7a5aa0,#ffc27a)">
-          <div class="sun" style="background:#ffdf9a"></div>
-          <svg class="sil" viewBox="0 0 270 44" preserveAspectRatio="none"><path d="M0 44 L0 30 Q20 18 40 28 Q55 8 78 26 Q95 16 112 28 Q135 10 160 27 Q180 18 198 29 Q220 14 244 28 L270 24 L270 44 Z" fill="#c87a3a"/></svg>
-        </div>
-        <div class="body"><h3>Золотая поляна</h3><p>Тихий закат, листопад и светлячки над тёплой травой. Мир, который обнимает оранжевым светом.</p><div class="go">→ войти</div></div>
+  <!-- Стартовый экран -->
+  <div id="menu-screen" class="screen">
+    <h1>🦊 FORBIDDEN FRUIT</h1>
+    <p class="tagline">Соберите запретные плоды вместе с друзьями в общем лесу</p>
+    <div class="menu-buttons">
+      <button id="btn-solo" class="btn primary">▶ Одиночная игра</button>
+      <button id="btn-net" class="btn secondary">🌐 Сетевая игра</button>
+    </div>
+    <p class="hint">WASD/стрелки — движение · Shift — бег · Пробел — прыжок/рывок · E — собрать · F — удар · P — пауза</p>
+  </div>
+
+  <!-- Лобби (сетевой режим). Поле адреса отсутствует: сервер берётся из ссылки автоматически -->
+  <div id="lobby-screen" class="screen hidden">
+    <h2>🌐 Сетевая прогулка</h2>
+    <p class="tagline">Все подключаются к одному адресу — <span id="lobby-addr-label"></span></p>
+    <label class="field">Имя лисёнка
+      <input id="lbName" maxlength="16" placeholder="например, Рыжик">
+    </label>
+    <div class="field">Цвет команды
+      <div id="lbTeams" class="teams">
+        <button class="team red selected" data-team="red">Рыжий</button>
+        <button class="team sand" data-team="sand">Песочный</button>
+        <button class="team silver" data-team="silver">Серебристый</button>
+        <button class="team coal" data-team="coal">Угольный</button>
       </div>
     </div>
-    <div class="m-controls"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> или стрелки — движение · <span class="key">SHIFT</span><span class="key">SPACE</span> — ускорение · <span class="key">P</span> — пауза</div>
-    <div class="m-note">🎧 со звуком нежнее · стрелка над лисёнком укажет путь к плоду</div>
-    <button id="netBtn" class="btn-net">🌐 Сетевая игра — вместе с друзьями</button>
-  </div>
-</div>
-
-<div id="lobby">
-  <div class="lobby-in">
-    <h2>Сетевая игра</h2>
-    <p class="lobby-sub">Лес один на всех: плоды, портал и дух тумана общие.<br>Сервер запускается командой <b>python3 server.py</b> (см. README).</p>
-    <div class="lobby-sub" id="lbWhere"></div>
-    <label>Ваше имя<input id="lbName" maxlength="16" placeholder="Лисёнок"></label>
-    <div class="lobby-row"><span>Цвет лисёнка:</span><span id="lbTeams"></span></div>
-    <div class="lobby-worlds" id="lbWorlds"></div>
-    <div class="lobby-btns">
-      <button class="btn btn-sm" id="lbJoin">Подключиться</button>
-      <button class="btn btn-sm ghost" id="lbBack">Назад</button>
+    <div class="field">Мир
+      <select id="lbWorld">
+        <option value="meadow">Луговина</option>
+        <option value="hollow">Дупло</option>
+        <option value="mistfen">Туманное болото</option>
+      </select>
     </div>
-    <div id="lbStatus"></div>
-    <div id="lbPlayers"></div>
+    <button id="btn-join" class="btn primary">Подключиться</button>
+    <p id="lobby-msg" class="hint"></p>
+    <button id="btn-back-menu" class="btn ghost">← Назад</button>
+  </div>
+
+  <!-- Финальный экран -->
+  <div id="final-screen" class="screen hidden">
+    <h2 id="final-title">Победа! 🏆</h2>
+    <p id="final-text"></p>
+    <div class="menu-buttons">
+      <button id="btn-final-restart" class="btn primary">новая прогулка</button>
+      <button id="btn-final-menu" class="btn ghost">в меню</button>
+    </div>
   </div>
 </div>
 
-<div id="pause"><div class="big">Пауза</div><div class="sub">Лисёнок присел отдохнуть. [P] — продолжить</div></div>
-<div id="end"><div class="big" id="endTitle"></div><div class="sub" id="endText"></div><button class="btn" id="endBtn">Выбрать другой мир</button></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-'use strict';
-function showErr(msg){const b=document.getElementById('errBox');
-  b.style.display='block';b.innerHTML='<b>Ой, что-то сломалось:</b><br>'+msg+'<br><small>Если написано "THREE" — нужен интернет для загрузки 3D-движка.</small>';}
-window.addEventListener('error',function(e){showErr(e.message);});
-if(!window.THREE){showErr('Не удалось загрузить Three.js. Проверьте интернет и обновите страницу.');}
-else{
-</script>
-
-<!-- Конфигурация и математика -->
-<script src="js/config/worlds.js"></script>
-<script src="js/config/game-config.js"></script>
-<script src="js/math/utils.js"></script>
-
-<!-- Ядро: текстуры, глобальное состояние, инициализация -->
-<script src="js/core/textures.js"></script>
-<script src="js/core/init-game.js"></script>
-
-<!-- Построение мира -->
-<script src="js/world/world-builder.js"></script>
-
-<!-- Лисёнок -->
-<script src="js/fox/fox.js"></script>
-
-<!-- Сущности: плоды, портал, дух -->
-<script src="js/entities/fruits-portal-spirit.js"></script>
-
-<!-- Частицы -->
-<script src="js/particles/particles-create.js"></script>
-
-<!-- Звук -->
-<script src="js/audio/audio.js"></script>
-
-<!-- Интерфейс -->
-<script src="js/ui/ui-hud.js"></script>
-
-<!-- Сетевой режим (после ядра: переопределяет collectFruit/hitFox/endGame) -->
-<script src="js/net/net-client.js"></script>
-
-<!-- Логика и игровой цикл -->
-<script src="js/core/game-logic.js"></script>
-<script src="js/core/game-loop.js"></script>
-
-<!-- Точка входа -->
 <script src="js/main.js"></script>
-
-<script>
-} // конец блока THREE
-</script>
+<script src="js/net/net-client.js"></script>
 </body>
 </html>
