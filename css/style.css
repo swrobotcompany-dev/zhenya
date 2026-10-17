@@ -100,6 +100,13 @@
 .team-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
 .team-dot:hover{transform:scale(1.15)}
 .team-dot.sel{border-color:#524678;transform:scale(1.15)}
+
+.lobby-worlds{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+.lw-card{cursor:pointer;border:2px solid #d8d0ec;background:#fff;color:#524678;border-radius:14px;
+  padding:9px 14px;font-family:'Comfortaa';font-weight:700;font-size:12.5px;transition:.2s}
+.lw-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(90,70,140,.18)}
+.lw-card.sel{border-color:var(--cc,#7f6fd8);background:color-mix(in srgb,var(--cc,#7f6fd8) 12%,#fff);
+  box-shadow:0 6px 16px rgba(90,70,140,.2)}
 .lobby-btns{display:flex;gap:12px;justify-content:center}
 .btn-sm{padding:11px 26px;font-size:13px}
 .btn-sm.ghost{background:#fff;color:#6f6390;border:2px solid #d8d0ec;box-shadow:none}

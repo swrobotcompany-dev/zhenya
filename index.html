@@ -68,10 +68,10 @@
   <div class="lobby-in">
     <h2>Сетевая игра</h2>
     <p class="lobby-sub">Лес один на всех: плоды, портал и дух тумана общие.<br>Сервер запускается командой <b>python3 server.py</b> (см. README).</p>
+    <div class="lobby-sub" id="lbWhere"></div>
     <label>Ваше имя<input id="lbName" maxlength="16" placeholder="Лисёнок"></label>
-    <label>Адрес сервера<input id="lbAddr" placeholder="192.168.1.5 (IP компьютера с сервером)">
-      <small>или host:port, например 192.168.1.5:8765</small></label>
     <div class="lobby-row"><span>Цвет лисёнка:</span><span id="lbTeams"></span></div>
+    <div class="lobby-worlds" id="lbWorlds"></div>
     <div class="lobby-btns">
       <button class="btn btn-sm" id="lbJoin">Подключиться</button>
       <button class="btn btn-sm ghost" id="lbBack">Назад</button>
@@ -121,12 +121,12 @@ else{
 <!-- Интерфейс -->
 <script src="js/ui/ui-hud.js"></script>
 
+<!-- Сетевой режим (после ядра: переопределяет collectFruit/hitFox/endGame) -->
+<script src="js/net/net-client.js"></script>
+
 <!-- Логика и игровой цикл -->
 <script src="js/core/game-logic.js"></script>
 <script src="js/core/game-loop.js"></script>
-
-<!-- Сетевой режим (локальная сеть) -->
-<script src="js/net/net-client.js"></script>
 
 <!-- Точка входа -->
 <script src="js/main.js"></script>

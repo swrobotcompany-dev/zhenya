@@ -17,8 +17,8 @@ const TEAM_COLORS=[0xd8793c,0x5aa8e0,0xb46ad8,0x62c47a];
     NET.team=+t.dataset.t;
     [...wrap.children].forEach(function(c){c.classList.toggle('sel',c===t);});});
   try{const saved=JSON.parse(localStorage.getItem('ffnet')||'{}');
-    if(saved.name)$('lbName').value=saved.name;
-    if(saved.host)$('lbAddr').value=saved.host;}catch(err){}
+    if(saved.name)$('lbName').value=saved.name;}catch(err){}
+  const w=$('lbWhere');if(w)w.textContent='Сервер: '+location.host+' (адрес подставлен автоматически)';
 })();
 function lbStatus(txt,bad){const s=$('lbStatus');if(!s)return;s.textContent=txt;s.classList.toggle('bad',!!bad);}
 function openLobby(){$('menu').classList.add('gone');$('lobby').classList.add('on');}
@@ -29,24 +29,34 @@ function refreshLbPlayers(list){
     return '<span class="pl"><i style="background:#'+new THREE.Color(TEAM_COLORS[p.team%4]).getHexString()+'"></i>'+escHtml(p.name)+'</span>';}).join('')):'';}
 function escHtml(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
-$('netBtn').addEventListener('click',openLobby);
+let NET_PENDING=null;   // выбранный мир до подключения
+function lobbyWorldCards(){
+  const box=$('lbWorlds');if(!box||box.children.length)return;
+  for(const k in WORLDS){const w=WORLDS[k];
+    const b=document.createElement('button');b.className='lw-card'+(k==='classic'?' sel':'');b.dataset.w=k;
+    b.style.setProperty('--cc','#'+new THREE.Color(w.fruit).getHexString());
+    b.textContent=w.name;b.title='Играть в мире: '+w.name;
+    box.appendChild(b);}
+  NET_PENDING='classic';
+  box.addEventListener('click',function(e){
+    const b=e.target.closest('.lw-card');if(!b)return;
+    NET_PENDING=b.dataset.w;
+    [...box.children].forEach(function(c){c.classList.toggle('sel',c===b);});});
+}
+$('netBtn').addEventListener('click',function(){
+  openLobby();lobbyWorldCards();
+  lbStatus('Адрес сервера ('+location.host+') определён автоматически — просто жмите «Подключиться».');
+});
 $('lbBack').addEventListener('click',closeLobby);
 $('lbJoin').addEventListener('click',function(){
   const name=($('lbName').value||'').trim()||'Лисёнок';
-  let host=($('lbAddr').value||'').trim();
-  if(!host){
-    host=(location.hostname==='localhost'||location.hostname==='127.0.0.1'||!location.hostname)
-      ?'ws://localhost:8765':('ws://'+location.hostname+':8765');
-    $('lbAddr').value=host;
-  }
-  if(/^wss?:\/\//i.test(host)){/* ok */}
-  else if(/^https?:\/\//i.test(host))host=host.replace(/^http/,'ws');
-  else host='ws://'+host.replace(/^\/\//,'');
-  if(!/:\d+/.test(host.split('/').pop()))host+=':8765';
-  try{localStorage.setItem('ffnet',JSON.stringify({name:name,host:host}));}catch(err){}
-  NET.name=name;NET.host=host;
-  lbStatus('Подключение к '+host+'…');$('lbJoin').disabled=true;
-  netConnect(host,name);
+  // адрес сервера = адрес страницы: всё (игра и сеть) на одном IP и порту
+  const url=(location.protocol==='https:'?'wss://':'ws://')+location.host;
+  try{localStorage.setItem('ffnet',JSON.stringify({name:name}));}catch(err){}
+  NET.name=name;NET.host=url;NET.worldChoice=NET_PENDING||'classic';
+  try{localStorage.setItem('ffnet',JSON.stringify({name:name,world:NET.worldChoice}));}catch(err){}
+  lbStatus('Подключение к '+url+'…');$('lbJoin').disabled=true;
+  netConnect(url,name);
 });
 
 /* ---------- соединение ---------- */
@@ -58,7 +68,7 @@ function netConnect(url,name){
   ws.onopen=function(){
     NET.connected=true;
     lbStatus('Соединение установлено, входим в лес…');
-    ws.send(JSON.stringify({t:'join',name:name,team:NET.team}));
+    ws.send(JSON.stringify({t:'join',name:name,team:NET.team,world:NET.worldChoice||'classic'}));
     setTimeout(function(){
       if(NET.connected&&!NET.fruitsInit)
         lbStatus('Мы на связи, но мир ещё не пришёл. Проверьте, что на сервере запущен python3 server.py');
@@ -68,7 +78,14 @@ function netConnect(url,name){
     let m;try{m=JSON.parse(ev.data);}catch(err){return;}
     if(m.t==='hello'){NET.id=m.id;NET.world=m.world;
       NET.serverSnapshot=m.snapshot||null;   // мир целиком пришёл вместе с hello
-      initGame(m.world||'classic',true);}
+      const want=NET.worldChoice||m.world||'classic';
+      if(m.world!==want){
+        // просим сервер переключить общий мир на выбранный (все игроки перезаходят)
+        lbStatus('Выбран мир «'+((WORLDS[want]||{}).name||want)+'» — перестраиваем лес для всех…');
+        NET.wantWorld=want;
+        ws.send(JSON.stringify({t:'setworld',world:want}));
+      }else startNetGame(want);}
+    else if(m.t==='worldok'){startNetGame(m.world);}
     else if(m.t==='state')applyState(m);
   };
   ws.onclose=function(){
@@ -82,6 +99,11 @@ function netConnect(url,name){
     }};
   ws.onerror=function(){/* onclose обработает */};
 }
+function startNetGame(key){
+  if(NET.fruitsInit)return;               // уже вошли
+  NET.worldChoice=key;
+  initGame(key,true);
+}
 function netSend(obj){
   if(NET.ws&&NET.ws.readyState===1){try{NET.ws.send(JSON.stringify(obj));}catch(err){}}
 }
@@ -90,7 +112,9 @@ function netSend(obj){
 function applyState(m){
   if(!NET.fruitsInit)return; // до входа в мир снапшоты игнорируем (hello всё даст)
   // мир поменялся (перезапуск кем-то) — перечитываем страницу, чтобы перестроить лес
-  if(NET.worldKey&&m.world&&NET.worldKey!==m.world){location.reload();return;}
+  if(NET.worldKey&&m.world&&NET.worldKey!==m.world){
+    setNetOverlay('Кто-то сменил мир — перезаходим…');
+    setTimeout(function(){location.reload();},900);return;}
   NET.worldKey=m.world||NET.worldKey;
   // плоды
   if(fruitsArr.length&&m.fruits){

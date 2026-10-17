@@ -3,7 +3,7 @@
 """Интеграционный тест сетевого сервера FORBIDDEN FRUIT (клиент на чистом сокете)."""
 import base64, hashlib, json, os, socket, struct, sys, time
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("FFPORT", "8000"))
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 def frame(payload: str) -> bytes:
@@ -33,6 +33,8 @@ class Client:
         self.id = None
         self.world = None
         self.snaps = []
+        self.evts = []          # все события из снапшотов (без дублей по seq)
+        self._seen_seq = set()
         self.hello = None
         self.send({"t": "join", "name": name, "team": team})
 
@@ -63,6 +65,10 @@ class Client:
                     self.hello = m; self.id = m["id"]; self.world = m["world"]
                 elif m.get("t") == "state":
                     self.snaps.append(m)
+                    for _ts, e in m.get("evts", []):
+                        if e.get("seq") not in self._seen_seq:
+                            self._seen_seq.add(e.get("seq"))
+                            self.evts.append(e)
 
     def last(self):
         return self.snaps[-1] if self.snaps else None
@@ -102,7 +108,7 @@ sa, sb = a.last(), b.last()
 check(sa["collected"] == 7 and sb["collected"] == 7, "счёт 7/7 у обоих")
 check(all(f[2] == 0 for f in sb["fruits"]), "плоды «сорваны» у всех")
 check(sb["portal"] is True, "портал открыт для всех")
-check(any(e[1]["kind"] == "collect" and e[1]["by"] == a.id for e in sb["evts"]),
+check(any(e["kind"] == "collect" and e.get("by") == a.id for e in b.evts),
       "событие collect с id автора дошло до Бори")
 
 for _ in range(3):
@@ -113,12 +119,33 @@ check(pba["hearts"] == 0 and pba["alive"] is False, "Боря выбыл (0 се
 check(a.last()["spirit"]["state"] in ("die", "lurk"), "дух перешёл в die/lurk после удара")
 
 a.send({"t": "portal"}); a.pump(0.4); b.pump(0.3)
-check(a.last()["state"] == "over" or any(e[1].get("kind") == "end" for e in a.last()["evts"]),
+check(a.last()["state"] == "over" or any(e.get("kind") == "end" for e in a.evts),
       "мир объявлен пройденным")
 
 a.send({"t": "restart", "world": "magic"}); a.pump(0.4); b.pump(0.3)
 check(a.last()["world"] == "magic" and b.last()["world"] == "magic", "рестарт применён у всех")
 check(a.last()["collected"] == 0, "после рестарта счёт обнулился")
+
+# --- тот же порт раздаёт игру по HTTP ---
+import urllib.request
+with urllib.request.urlopen("http://%s:%d/" % (HOST, PORT), timeout=5) as r:
+    html = r.read().decode("utf-8", "replace")
+check(r.status == 200 and "FORBIDDEN FRUIT" in html, "GET / с того же порта отдаёт index.html")
+with urllib.request.urlopen("http://%s:%d/js/net/net-client.js" % (HOST, PORT), timeout=5) as r:
+    check(r.status == 200 and b"netConnect" in r.read(), "отдаются файлы игры (net-client.js)")
+
+# --- выбор карты в сетевом лобби: setworld меняет мир у всех ---
+a.send({"t": "setworld", "world": "autumn"})
+a.pump(0.4); b.pump(0.4)
+check(a.last()["world"] == "autumn" and b.last()["world"] == "autumn",
+      "setworld: оба игрока видят новый общий мир autumn")
+c = Client("Вера", 2)   # приходит сразу с выбором мира в join
+c.s.sendall(frame(json.dumps({"t": "join", "name": "Вера", "team": 2, "world": "magic"})))
+c.pump(0.5)
+check(c.hello and c.hello["world"] == "magic", "join с world=magic переключил общий мир")
+check(any(e["kind"] == "newworld" for e in a.evts) or a.last()["world"] == "magic",
+      "остальные узнали о смене мира")
+c.close()
 
 b.close(); a.pump(0.6)
 ids = [p["id"] for p in a.last()["players"]]
