@@ -7,6 +7,7 @@ HTML отдаётся с gzip, ETag/Last-Modified и кешируется в о�
 """
 import argparse
 import gzip
+import ipaddress
 import socket
 from datetime import timezone
 from email.utils import formatdate, parsedate_to_datetime
@@ -27,24 +28,81 @@ def cached_index(mtime_ns, size):
 
 
 def local_addresses():
+    """Найти IPv4 компьютера, в том числе на Wi-Fi без доступа к интернету."""
     addresses = set()
+
+    # На Linux получаем адреса непосредственно с сетевых интерфейсов.
+    # Это работает даже без DNS, шлюза и подключения к интернету.
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            # connect не посылает UDP-пакет, только выбирает сетевой интерфейс.
-            sock.connect(("192.0.2.1", 80))
-            addresses.add(sock.getsockname()[0])
-    except OSError:
+        import fcntl
+        import struct
+
+        for _, interface in socket.if_nameindex():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    packed = struct.pack("256s", interface.encode("utf-8")[:15])
+                    info = fcntl.ioctl(sock.fileno(), 0x8915, packed)  # SIOCGIFADDR
+                    addresses.add(socket.inet_ntoa(info[20:24]))
+            except (OSError, UnicodeError):
+                continue
+    except (ImportError, AttributeError, OSError):
         pass
-    try:
-        addresses.update(socket.gethostbyname_ex(socket.gethostname())[2])
-    except OSError:
-        pass
-    return sorted(ip for ip in addresses
-                  if ip and not ip.startswith("127.") and ip != "0.0.0.0")
+
+    # Windows и прочие системы: разрешение имени своего компьютера.
+    for hostname in (socket.gethostname(), socket.getfqdn()):
+        try:
+            for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+                addresses.add(info[4][0])
+        except OSError:
+            pass
+
+    # Дополнительный способ определения активного интерфейса.
+    # UDP connect здесь ничего не отправляет и не требует работающего интернета.
+    for destination in ("192.168.1.1", "10.0.0.1", "1.1.1.1"):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.connect((destination, 80))
+                addresses.add(sock.getsockname()[0])
+        except OSError:
+            pass
+
+    # На Windows имя хоста иногда разрешается только в 127.0.0.1.
+    # В ipconfig ищем именно строки адреса IPv4, а не шлюз или DNS.
+    if not any(ip.startswith(("192.168.", "10.", "172.")) for ip in addresses):
+        try:
+            import subprocess
+            import re
+            import sys
+
+            if sys.platform == "win32":
+                output = subprocess.run(
+                    ["ipconfig"], capture_output=True, text=True,
+                    errors="replace", timeout=3, check=False
+                ).stdout
+                for line in output.splitlines():
+                    if "IPv4" in line:
+                        match = re.search(r"(?<!\\d)(?:\\d{1,3}\\.){3}\\d{1,3}(?!\\d)", line)
+                        if match:
+                            addresses.add(match.group())
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    usable = []
+    for ip in addresses:
+        try:
+            address = ipaddress.IPv4Address(ip)
+            if not (address.is_loopback or address.is_link_local
+                    or address.is_unspecified or address.is_multicast):
+                usable.append(ip)
+        except ipaddress.AddressValueError:
+            pass
+
+    # Частные адреса (обычно Wi-Fi/Ethernet) выводим перед публичными.
+    return sorted(set(usable), key=lambda ip: (not ipaddress.IPv4Address(ip).is_private, ip))
 
 
 class GameHandler(BaseHTTPRequestHandler):
-    server_version = "ForbiddenFruit/1.1"
+    server_version = "ForbiddenFruit/1.2"
 
     def do_GET(self):
         self.serve_page(with_body=True)
@@ -53,7 +111,19 @@ class GameHandler(BaseHTTPRequestHandler):
         self.serve_page(with_body=False)
 
     def serve_page(self, with_body):
-        if urlsplit(self.path).path not in ("/", "/index.html"):
+        path = urlsplit(self.path).path
+        if path in ("/health", "/healthz"):
+            payload = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            if with_body:
+                self.wfile.write(payload)
+            return
+        if path not in ("/", "/index.html"):
             self.send_error(404, "Not Found")
             return
         try:
@@ -115,17 +185,34 @@ def main():
         parser.error("Порт должен быть от 1 до 65535")
     try:
         with ThreadingHTTPServer((args.host, args.port), GameHandler) as httpd:
-            print(f"FORBIDDEN FRUIT: http://localhost:{args.port}", flush=True)
+            port = httpd.server_port
+            print(f"FORBIDDEN FRUIT — сервер запущен (порт {port})", flush=True)
+            if args.host in ("0.0.0.0", "127.0.0.1", "localhost"):
+                print(f"На этом компьютере: http://localhost:{port}/", flush=True)
+            else:
+                print(f"Адрес сервера: http://{args.host}:{port}/", flush=True)
+
             if args.host == "0.0.0.0":
-                for ip in local_addresses():
-                    print(f"Другой ПК в той же сети: http://{ip}:{args.port}", flush=True)
+                addresses = local_addresses()
+                if addresses:
+                    print("С других устройств в той же Wi-Fi/LAN сети:", flush=True)
+                    for ip in addresses:
+                        print(f"  http://{ip}:{port}/", flush=True)
+                else:
+                    print("IP не определён. Найдите его: ipconfig (Windows) / ip -4 addr (Linux).", flush=True)
+                print(f"Проверка соединения: http://<IP_СЕРВЕРА>:{port}/health", flush=True)
+                print(f"Если не открывается — разрешите входящие TCP на порт {port} в брандмауэре.", flush=True)
+                print("Гостевая Wi-Fi сеть или изоляция клиентов на роутере тоже могут мешать.", flush=True)
+            else:
+                print("Внимание: с параметром --host доступ может быть ограничен.", flush=True)
+
             print("Ctrl+C — остановить сервер.", flush=True)
             try:
                 httpd.serve_forever()
             except KeyboardInterrupt:
-                print("\nСервер остановлен.")
+                print("\\nСервер остановлен.")
     except OSError as exc:
-        parser.exit(1, f"Не удалось запустить сервер: {exc}\n")
+        parser.exit(1, f"Не удалось запустить сервер: {exc}\\n")
 
 
 if __name__ == "__main__":
