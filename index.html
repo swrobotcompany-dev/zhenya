@@ -1,78 +1,30 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forbidden Fruit — сетевая игра про лисят</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#091820" />
+  <title>WorldHarvest — Выживание в разных мирах</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="game.js" defer></script>
 </head>
 <body>
-<div id="app">
-  <canvas id="game"></canvas>
-
-  <!-- HUD -->
-  <div id="hud" class="hidden">
-    <div class="hud-left">
-      <div id="hearts">♥ ♥ ♥</div>
-      <div id="fruit-counter">🍎 0 / 7</div>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><span class="logo">✦</span><div><strong>WORLD<span>HARVEST</span></strong><small>Исследуй. Собирай. Выживай.</small></div></div>
+      <div class="header-actions"><span class="status" id="worldLabel">🌿 Зелёный мир</span><button id="pauseButton" type="button" title="Пауза (Esc)">Ⅱ</button></div>
+    </header>
+    <section class="hud" aria-label="Показатели выживания">
+      <div class="stat"><div class="stat-label">❤ Здоровье <b id="healthText">100</b></div><div class="meter"><i id="healthBar" class="health"></i></div></div>
+      <div class="stat"><div class="stat-label">◆ Сытость <b id="hungerText">80</b></div><div class="meter"><i id="hungerBar" class="hunger"></i></div></div>
+      <div class="stat stat-time"><div class="stat-label">◷ Выжил <b id="timeText">00:00</b></div><div class="stat-label">✦ Очки <b id="scoreText">0</b></div></div>
+    </section>
+    <div class="game-area"><canvas id="game" width="960" height="600" aria-label="Поле игры WorldHarvest"></canvas>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <div class="overlay" id="overlay"><div class="modal"><div class="modal-icon" id="modalIcon">🌎</div><h1 id="modalTitle">WORLDHARVEST</h1><p id="modalBody">Собирай плоды, поддерживай сытость и здоровье. Найди портал и открой следующий мир!</p><button class="primary" id="startButton" type="button">Начать выживание</button><p class="hint">WASD / стрелки — движение · E — собрать / войти в портал · Esc — пауза</p></div></div>
+      <div class="mobile-controls" aria-label="Сенсорное управление"><div class="dpad"><button data-direction="up" aria-label="Вверх">▲</button><div><button data-direction="left" aria-label="Влево">◀</button><button data-direction="down" aria-label="Вниз">▼</button><button data-direction="right" aria-label="Вправо">▶</button></div></div><button id="interactButton" class="interact" type="button">✦<small>Действие</small></button></div>
     </div>
-    <div class="hud-right">
-      <div id="net-status" class="hidden">🟢 игроков: 1</div>
-      <div id="world-name"></div>
-    </div>
-    <div id="toast"></div>
-  </div>
-
-  <!-- Стартовый экран -->
-  <div id="menu-screen" class="screen">
-    <h1>🦊 FORBIDDEN FRUIT</h1>
-    <p class="tagline">Соберите запретные плоды вместе с друзьями в общем лесу</p>
-    <div class="menu-buttons">
-      <button id="btn-solo" class="btn primary">▶ Одиночная игра</button>
-      <button id="btn-net" class="btn secondary">🌐 Сетевая игра</button>
-    </div>
-    <p class="hint">WASD/стрелки — движение · Shift — бег · Пробел — прыжок/рывок · E — собрать · F — удар · P — пауза</p>
-  </div>
-
-  <!-- Лобби (сетевой режим). Поле адреса отсутствует: сервер берётся из ссылки автоматически -->
-  <div id="lobby-screen" class="screen hidden">
-    <h2>🌐 Сетевая прогулка</h2>
-    <p class="tagline">Все подключаются к одному адресу — <span id="lobby-addr-label"></span></p>
-    <label class="field">Имя лисёнка
-      <input id="lbName" maxlength="16" placeholder="например, Рыжик">
-    </label>
-    <div class="field">Цвет команды
-      <div id="lbTeams" class="teams">
-        <button class="team red selected" data-team="red">Рыжий</button>
-        <button class="team sand" data-team="sand">Песочный</button>
-        <button class="team silver" data-team="silver">Серебристый</button>
-        <button class="team coal" data-team="coal">Угольный</button>
-      </div>
-    </div>
-    <div class="field">Мир
-      <select id="lbWorld">
-        <option value="meadow">Луговина</option>
-        <option value="hollow">Дупло</option>
-        <option value="mistfen">Туманное болото</option>
-      </select>
-    </div>
-    <button id="btn-join" class="btn primary">Подключиться</button>
-    <p id="lobby-msg" class="hint"></p>
-    <button id="btn-back-menu" class="btn ghost">← Назад</button>
-  </div>
-
-  <!-- Финальный экран -->
-  <div id="final-screen" class="screen hidden">
-    <h2 id="final-title">Победа! 🏆</h2>
-    <p id="final-text"></p>
-    <div class="menu-buttons">
-      <button id="btn-final-restart" class="btn primary">новая прогулка</button>
-      <button id="btn-final-menu" class="btn ghost">в меню</button>
-    </div>
-  </div>
-</div>
-
-<script src="js/main.js"></script>
-<script src="js/net/net-client.js"></script>
+    <footer><span id="objective">Цель: собери 3 яблока, затем найди портал</span><span id="inventory">🍎 0 · 🌵 0 · 🫐 0</span></footer>
+  </main>
 </body>
 </html>
