@@ -81,7 +81,7 @@ def local_addresses():
                 ).stdout
                 for line in output.splitlines():
                     if "IPv4" in line:
-                        match = re.search(r"(?<!\\d)(?:\\d{1,3}\\.){3}\\d{1,3}(?!\\d)", line)
+                        match = re.search(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", line)
                         if match:
                             addresses.add(match.group())
         except (OSError, subprocess.TimeoutExpired):
@@ -210,9 +210,9 @@ def main():
             try:
                 httpd.serve_forever()
             except KeyboardInterrupt:
-                print("\\nСервер остановлен.")
+                print("\nСервер остановлен.")
     except OSError as exc:
-        parser.exit(1, f"Не удалось запустить сервер: {exc}\\n")
+        parser.exit(1, f"Не удалось запустить сервер: {exc}\n")
 
 
 if __name__ == "__main__":
