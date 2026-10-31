@@ -77,6 +77,8 @@
   .m-controls{margin-top:30px;font-size:12px;color:#8a7fa8;line-height:2}
   .key{display:inline-block;min-width:26px;text-align:center;padding:4px 7px;background:#fff;border-radius:8px;border:1px solid #d8d0ec;border-bottom-width:3px;font-weight:800;font-size:11px;color:#6f6390;margin:0 2px}
   .m-note{margin-top:12px;font-size:11px;color:#a99cc8}
+  .quality-choice{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:18px;color:#6f6390;font-size:13px;font-weight:700}
+  .quality-choice select{max-width:190px;padding:7px 12px;border-radius:12px;border:1px solid #cec2e8;color:#524678;background:#fff;font:inherit;cursor:pointer}
 
   #pause,#end{position:fixed;inset:0;z-index:45;background:rgba(250,246,255,.82);backdrop-filter:blur(6px);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center}
   #pause.on,#end.on{display:flex}
@@ -136,6 +138,14 @@
         <div class="body"><h3>Золотая поляна</h3><p>Тихий закат, листопад и светлячки над тёплой травой. Мир, который обнимает оранжевым светом.</p><div class="go">→ войти</div></div>
       </div>
     </div>
+    <label class="quality-choice" for="qualitySelect">Качество графики
+      <select id="qualitySelect" aria-label="Качество графики">
+        <option value="auto">Авто (рекомендуется)</option>
+        <option value="eco">Экономное</option>
+        <option value="balanced">Сбалансированное</option>
+        <option value="high">Высокое</option>
+      </select>
+    </label>
     <div class="m-controls"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> или стрелки — движение · <span class="key">SHIFT</span><span class="key">SPACE</span> — ускорение · <span class="key">P</span> / <span class="key">ESC</span> — пауза</div>
     <div class="m-note">🎧 со звуком нежнее · стрелка над лисёнком укажет путь к плоду</div>
   </div>
@@ -195,37 +205,66 @@ function gH(x,z){let y=Math.sin(x*.15)*Math.cos(z*.13)*.5+Math.sin(x*.4+z*.31)*.
   const r=Math.hypot(x,z);if(r<8)y*=r/8;return y*.9;}
 
 const G={state:'menu',t:0,hearts:3,fruits:0,stam:CFG.stam,fear:0,invuln:0,hbT:0,stepAcc:0,introT:-1,beastAt:10,muted:false,won:false};
+const QUALITY_PRESETS={
+  eco:{pixelRatio:1,shadows:512,shadowEvery:3,trees:45,grass:160,particles:40,fps:30,antialias:false},
+  balanced:{pixelRatio:1.35,shadows:1024,shadowEvery:2,trees:65,grass:240,particles:60,fps:60,antialias:true},
+  high:{pixelRatio:1.8,shadows:2048,shadowEvery:1,trees:80,grass:320,particles:80,fps:60,antialias:true}
+};
+function graphicsChoice(){
+  let selected='auto';
+  try{selected=localStorage.getItem('forbidden-fruit-quality')||'auto';}catch(e){}
+  if(!['auto','eco','balanced','high'].includes(selected))selected='auto';
+  const cores=navigator.hardwareConcurrency||4,mem=navigator.deviceMemory||0;
+  const reduced=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const slow=(cores<=4)||(mem>0&&mem<=4)||reduced;
+  const preset=selected==='auto'?(slow?'eco':'balanced'):selected;
+  return Object.assign({selected:selected},QUALITY_PRESETS[preset]);
+}
+let PERF=graphicsChoice();
 const keys={};
+const textureCache=new Map();
+const frameStats={lastRender:0,start:0,frames:0,shadowFrame:0,lowered:0};
+const sunOffset=new THREE.Vector3();
+$('qualitySelect').value=PERF.selected;
+$('qualitySelect').addEventListener('change',function(){
+  try{localStorage.setItem('forbidden-fruit-quality',this.value);}catch(e){}
+});
 
 let renderer,scene,camera,clock,sunLight,stars=null,fireflies=null,mushrooms=[];
 let floaters=null,floatBase=[];
 
 function glowTexture(r,g,b,a){a=a===undefined?.6:a;
+  const key=[r|0,g|0,b|0,a].join(',');
+  if(textureCache.has(key))return textureCache.get(key);
   const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');
   const gr=x.createRadialGradient(32,32,0,32,32,32);
   gr.addColorStop(0,'rgba('+(r|0)+','+(g|0)+','+(b|0)+','+a+')');
   gr.addColorStop(1,'rgba('+(r|0)+','+(g|0)+','+(b|0)+',0)');
-  x.fillStyle=gr;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
+  x.fillStyle=gr;x.fillRect(0,0,64,64);
+  const tex=new THREE.CanvasTexture(c);textureCache.set(key,tex);return tex;}
 function beamTexture(){
+  if(textureCache.has('beam'))return textureCache.get('beam');
   const c=document.createElement('canvas');c.width=32;c.height=128;const x=c.getContext('2d');
   const gr=x.createLinearGradient(0,128,0,0);
   gr.addColorStop(0,'rgba(255,255,255,.85)');
   gr.addColorStop(.5,'rgba(255,255,255,.35)');
   gr.addColorStop(1,'rgba(255,255,255,0)');
   x.fillStyle=gr;x.fillRect(0,0,32,128);
-  return new THREE.CanvasTexture(c);}
+  const tex=new THREE.CanvasTexture(c);textureCache.set('beam',tex);return tex;}
 let BEAMTEX=null;
 
 function initGame(key){
   try{
     W=WORLDS[key];W.key=key;
+    PERF=graphicsChoice();
     BEAMTEX=beamTexture();
     document.documentElement.style.setProperty('--accent','#'+new THREE.Color(W.fruit).getHexString());
 
-    renderer=new THREE.WebGLRenderer({antialias:true});
-    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer=new THREE.WebGLRenderer({antialias:PERF.antialias,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,PERF.pixelRatio));
     renderer.setSize(innerWidth,innerHeight);
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    if(PERF.shadowEvery>1){renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;}
     renderer.outputEncoding=THREE.sRGBEncoding;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
     $('stage').appendChild(renderer.domElement);
@@ -237,7 +276,8 @@ function initGame(key){
     scene.add(new THREE.AmbientLight(W.amb,W.ambI));
     scene.add(new THREE.HemisphereLight(W.hemiS,W.hemiG,W.hemiI));
     sunLight=new THREE.DirectionalLight(W.sun,W.sunI);
-    sunLight.castShadow=true;sunLight.shadow.mapSize.set(2048,2048);
+    sunLight.castShadow=true;sunLight.shadow.mapSize.set(PERF.shadows,PERF.shadows);
+    sunOffset.set(W.glowDir[0],W.glowDir[1],W.glowDir[2]).normalize().multiplyScalar(70);
     const sc=sunLight.shadow.camera;sc.left=-32;sc.right=32;sc.top=32;sc.bottom=-32;sc.near=5;sc.far=250;
     scene.add(sunLight);scene.add(sunLight.target);
 
@@ -306,20 +346,41 @@ function buildGround(){
 }
 
 function buildTrees(){
+  // InstancedMesh: те же силуэты/цвета, но ~5 draw calls вместо сотен мешей.
   const trunkMat=new THREE.MeshStandardMaterial({color:W.trunk,roughness:.95});
   const leafMats=W.leaves.map(function(c){return new THREE.MeshStandardMaterial({color:c,roughness:.9,flatShading:true});});
-  for(let i=0;i<80;i++){
+  const trunkItems=[],leafItems=W.leaves.map(function(){return [];});
+  for(let i=0;i<PERF.trees;i++){
     let x,z,r;
     do{x=rnd(-70,70);z=rnd(-70,70);r=Math.hypot(x,z);}while(r<9||r>72);
-    const g=new THREE.Group(),h=rnd(3.5,6.5);
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.12,.22,h,7),trunkMat);
-    trunk.position.y=h/2;trunk.castShadow=true;g.add(trunk);
-    const nl=3+(Math.random()*3|0);
+    const h=rnd(3.5,6.5),groundY=gH(x,z)-.1,angle=rnd(6);
+    trunkItems.push({x:x,y:groundY+h/2,z:z,sx:1,sy:h,sz:1});
+    const nl=3+(Math.random()*3|0),cs=Math.cos(angle),sn=Math.sin(angle);
     for(let j=0;j<nl;j++){
-      const s=new THREE.Mesh(new THREE.SphereGeometry(rnd(.9,1.7),9,7),leafMats[(Math.random()*leafMats.length)|0]);
-      s.position.set(rnd(-1,1),h+rnd(-.6,1.2),rnd(-1,1));
-      s.scale.y=rnd(.7,.95);s.castShadow=true;g.add(s);}
-    g.position.set(x,gH(x,z)-.1,z);g.rotation.y=rnd(6);scene.add(g);}
+      const ox=rnd(-1,1),oz=rnd(-1,1),radius=rnd(.9,1.7);
+      const color=(Math.random()*W.leaves.length)|0;
+      leafItems[color].push({x:x+ox*cs+oz*sn,y:groundY+h+rnd(-.6,1.2),
+        z:z-ox*sn+oz*cs,sx:radius,sy:radius*rnd(.7,.95),sz:radius});
+    }
+  }
+  const dummy=new THREE.Object3D();
+  function addInstances(items,geometry,material){
+    if(!items.length)return;
+    const mesh=new THREE.InstancedMesh(geometry,material,items.length);
+    for(let i=0;i<items.length;i++){
+      const o=items[i];
+      dummy.position.set(o.x,o.y,o.z);
+      dummy.scale.set(o.sx,o.sy,o.sz);
+      dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate=true;
+    mesh.castShadow=true;
+    mesh.frustumCulled=false; // r128 не учитывает всю область разнесённых инстансов
+    scene.add(mesh);
+  }
+  addInstances(trunkItems,new THREE.CylinderGeometry(.12,.22,1,7),trunkMat);
+  const leafGeometry=new THREE.SphereGeometry(1,9,7);
+  leafItems.forEach(function(items,i){addInstances(items,leafGeometry,leafMats[i]);});
 }
 
 function buildDetails(){
@@ -330,9 +391,9 @@ function buildDetails(){
     const m=new THREE.Mesh(new THREE.DodecahedronGeometry(s,0),rockMat);
     m.position.set(x,gH(x,z)+s*.3,z);
     m.rotation.set(rnd(3),rnd(3),rnd(3));m.castShadow=true;scene.add(m);}
-  { const grass=new THREE.InstancedMesh(new THREE.ConeGeometry(.05,.45,4),new THREE.MeshStandardMaterial({color:W.grass,roughness:1}),320);
+  { const grass=new THREE.InstancedMesh(new THREE.ConeGeometry(.05,.45,4),new THREE.MeshStandardMaterial({color:W.grass,roughness:1}),PERF.grass);
     const d=new THREE.Object3D();
-    for(let i=0;i<320;i++){
+    for(let i=0;i<PERF.grass;i++){
       const a=rnd(Math.PI*2),r=rnd(3,58),x=Math.cos(a)*r,z=Math.sin(a)*r;
       d.position.set(x,gH(x,z)+.2,z);
       d.rotation.set(rnd(-.25,.25),rnd(6),rnd(-.25,.25));
@@ -537,7 +598,7 @@ function buildParticles(){
     fireflies.userData.base=[];
     for(let i=0;i<34;i++){const a=rnd(Math.PI*2),r=rnd(5,50);
       fireflies.userData.base.push({x:Math.cos(a)*r,y:rnd(.5,2.5),z:Math.sin(a)*r,ph:rnd(9)});}}
-  for(let i=0;i<80;i++){
+  for(let i=0;i<PERF.particles;i++){
     const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(255,255,255,.7),transparent:true,opacity:0,depthWrite:false}));
     s.visible=false;scene.add(s);
     parts.push({s:s,vel:new THREE.Vector3(),life:0,max:1,size:1});}
@@ -871,8 +932,8 @@ function updateCamera(dt){
   camera.position.lerp(desired,Math.min(1,dt*4));
   camTarget.set(fp.x,fp.y+1.4,fp.z);
   camera.lookAt(camTarget);
-  camera.fov=lerp(camera.fov,55+G.fear*4,Math.min(1,dt*3));
-  camera.updateProjectionMatrix();
+  const nextFov=lerp(camera.fov,55+G.fear*4,Math.min(1,dt*3));
+  if(Math.abs(nextFov-camera.fov)>.002){camera.fov=nextFov;camera.updateProjectionMatrix();}
 }
 function updateAmbient(dt){
   const p=floaters.geometry.attributes.position;
@@ -892,9 +953,29 @@ function updateAmbient(dt){
     m.halo.material.opacity=.5+Math.sin(G.t*1.8+m.ph)*.3;
     m.cap.material.emissiveIntensity=1.2+Math.sin(G.t*1.8+m.ph)*.8;}
 }
-function animate(){
+function animate(now){
   requestAnimationFrame(animate);
+  if(document.hidden){frameStats.lastRender=0;clock.getDelta();return;}
+  if(!now)now=performance.now();
+  if(frameStats.lastRender && now-frameStats.lastRender<1000/PERF.fps-1)return;
+  frameStats.lastRender=now;
   const dt=Math.min(clock.getDelta(),.05);
+  // Auto: снижать внутреннее разрешение, если реальная частота кадров низкая.
+  if(PERF.selected==='auto'&&G.state==='play'){
+    if(!frameStats.start)frameStats.start=now;
+    frameStats.frames++;
+    if(now-frameStats.start>4000){
+      const measured=frameStats.frames*1000/(now-frameStats.start);
+      if(measured<34&&PERF.pixelRatio>.75){
+        PERF.pixelRatio=Math.max(.75,PERF.pixelRatio-.2);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,PERF.pixelRatio));
+        renderer.setSize(innerWidth,innerHeight);
+        frameStats.lowered++;
+        if(frameStats.lowered===1)setHint('Подстроили качество графики для плавной игры',3);
+      }
+      frameStats.start=now;frameStats.frames=0;
+    }
+  }else{frameStats.start=0;frameStats.frames=0;}
   if(G.state!=='pause'){
     G.t+=dt;
     updateAmbient(dt);
@@ -919,13 +1000,14 @@ function animate(){
       $('near').style.opacity=G.fear*.8;
       G.hbT-=dt;
       if(G.fear>.1&&G.hbT<=0){if(S)S.heart(G.fear);G.hbT=1.2-G.fear*.6;}
-      const sd=new THREE.Vector3(W.glowDir[0],W.glowDir[1],W.glowDir[2]).normalize();
-      sunLight.position.copy(fox.group.position).addScaledVector(sd,70);
+      sunLight.position.copy(fox.group.position).add(sunOffset);
       sunLight.target.position.copy(fox.group.position);
       sunLight.target.updateMatrixWorld();}
     else if(G.state==='end'){updatePortal(dt);}
     updateParts(dt);
     updateCamera(dt);}
+  if(PERF.shadowEvery>1 && ++frameStats.shadowFrame%PERF.shadowEvery===0)
+    renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
 updateHearts();
