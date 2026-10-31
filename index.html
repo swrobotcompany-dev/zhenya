@@ -529,7 +529,12 @@ function buildFruits(){
     const f=new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),
       new THREE.MeshStandardMaterial({color:W.fruit,emissive:W.fruitEm,emissiveIntensity:2.4,roughness:.25}));
     f.position.y=-.36;hang.add(f);
-    const light=new THREE.PointLight(W.fruit,2.1,15);light.position.y=-.3;hang.add(light);
+    const light=new THREE.PointLight(W.fruit,2.1,15);light.position.y=-.3;
+    // Меньше динамических источников света в экономном режиме.
+    // Видимые орбы, лучи и свечение не исчезают.
+    if(PERF.shadows===512&&i%3!==0)light.visible=false;
+    else if(PERF.shadows===1024&&i%2!==0)light.visible=false;
+    hang.add(light);
     const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(W.halo[0],W.halo[1],W.halo[2],.7),transparent:true,opacity:.75,depthWrite:false,blending:THREE.AdditiveBlending}));
     halo.scale.set(3.2,3.2,1);halo.position.y=-.36;hang.add(halo);
     // луч света в небо
