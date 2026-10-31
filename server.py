@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
-"""FORBIDDEN FRUIT — простой HTTP-сервер для игры на localhost и в локальной сети.
+"""FORBIDDEN FRUIT: лёгкий локальный HTTP-сервер (Python 3, без зависимостей).
 
-По умолчанию принимает подключения на всех IPv4-интерфейсах (0.0.0.0).
-WebSocket, лобби и Python-зависимости не требуются.
+Подключение: http://localhost:8000 или http://<локальный-IP-ПК>:8000.
+HTML отдаётся с gzip, ETag/Last-Modified и кешируется в оперативной памяти
+сервера между запросами. WebSocket и мультиплеер не нужны.
 """
 import argparse
+import gzip
 import socket
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from datetime import timezone
+from email.utils import formatdate, parsedate_to_datetime
+from functools import lru_cache
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+INDEX = ROOT / "index.html"
+
+
+@lru_cache(maxsize=3)
+def cached_index(mtime_ns, size):
+    """Готовые несжатая и gzip-версии HTML; ключ меняется при изменении файла."""
+    content = INDEX.read_bytes()
+    return content, gzip.compress(content, compresslevel=6)
 
 
 def local_addresses():
-    """Найти подходящие локальные IPv4-адреса для ссылки друзьям."""
     addresses = set()
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            # Не отправляет UDP-пакетов, лишь определяет исходящий сетевой интерфейс.
+            # connect не посылает UDP-пакет, только выбирает сетевой интерфейс.
             sock.connect(("192.0.2.1", 80))
             addresses.add(sock.getsockname()[0])
     except OSError:
@@ -31,53 +43,82 @@ def local_addresses():
                   if ip and not ip.startswith("127.") and ip != "0.0.0.0")
 
 
-class GameHandler(SimpleHTTPRequestHandler):
-    """Показываем исходную игру, не открывая другие файлы проекта."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(ROOT), **kwargs)
-
-    def _allowed(self):
-        return urlsplit(self.path).path in ("/", "/index.html")
+class GameHandler(BaseHTTPRequestHandler):
+    server_version = "ForbiddenFruit/1.1"
 
     def do_GET(self):
-        if not self._allowed():
-            self.send_error(404, "Not Found")
-            return
-        super().do_GET()
+        self.serve_page(with_body=True)
 
     def do_HEAD(self):
-        if not self._allowed():
+        self.serve_page(with_body=False)
+
+    def serve_page(self, with_body):
+        if urlsplit(self.path).path not in ("/", "/index.html"):
             self.send_error(404, "Not Found")
             return
-        super().do_HEAD()
+        try:
+            stat = INDEX.stat()
+            plain, zipped = cached_index(stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            self.send_error(500, "Could not read game")
+            return
 
-    def log_message(self, fmt, *args):
-        print("[%s] %s" % (self.log_date_time_string(), fmt % args))
+        # ETag делает повторную загрузку лёгкой: сервер вернёт 304 без HTML.
+        etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+        last_modified = formatdate(stat.st_mtime, usegmt=True)
+        not_modified = self.headers.get("If-None-Match") == etag
+        if not self.headers.get("If-None-Match") and self.headers.get("If-Modified-Since"):
+            try:
+                changed_since = parsedate_to_datetime(self.headers["If-Modified-Since"])
+                if changed_since.tzinfo is None:
+                    changed_since = changed_since.replace(tzinfo=timezone.utc)
+                not_modified = int(stat.st_mtime) <= int(changed_since.timestamp())
+            except (ValueError, TypeError, OverflowError):
+                pass
+
+        if not_modified:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Last-Modified", last_modified)
+            self.send_header("Cache-Control", "private, no-cache")
+            self.end_headers()
+            return
+
+        encodings = self.headers.get("Accept-Encoding", "").lower()
+        use_gzip = any(token.strip().split(";")[0] == "gzip" for token in encodings.split(","))
+        body = zipped if use_gzip else plain
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Cache-Control", "private, no-cache")
+        self.send_header("ETag", etag)
+        self.send_header("Last-Modified", last_modified)
+        self.send_header("Vary", "Accept-Encoding")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        if with_body:
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FORBIDDEN FRUIT — сервер для игры в браузере")
-    parser.add_argument("--port", type=int, default=8000, help="порт HTTP (по умолчанию 8000)")
+    parser = argparse.ArgumentParser(description="FORBIDDEN FRUIT — локальный сервер игры")
+    parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="0.0.0.0",
-                        help="адрес прослушивания: 0.0.0.0 для локальной сети; 127.0.0.1 только для себя")
+                        help="0.0.0.0 для LAN (по умолчанию), 127.0.0.1 для одного ПК")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("Порт должен быть от 1 до 65535")
-
     try:
         with ThreadingHTTPServer((args.host, args.port), GameHandler) as httpd:
-            print("FORBIDDEN FRUIT — сервер запущен", flush=True)
-            print(f"На этом ПК: http://localhost:{args.port}")
+            print(f"FORBIDDEN FRUIT: http://localhost:{args.port}", flush=True)
             if args.host == "0.0.0.0":
-                ips = local_addresses()
-                for ip in ips:
-                    print(f"На другом ПК в той же сети: http://{ip}:{args.port}")
-                if not ips:
-                    print("Локальный IP: посмотрите ipconfig (Windows) или ip -4 addr (Linux).")
-                print("Если удалённый ПК не подключается, проверьте брандмауэр и адрес IPv4.")
-            elif args.host not in ("localhost", "127.0.0.1"):
-                print(f"Адрес сервера: http://{args.host}:{args.port}")
+                for ip in local_addresses():
+                    print(f"Другой ПК в той же сети: http://{ip}:{args.port}", flush=True)
             print("Ctrl+C — остановить сервер.", flush=True)
             try:
                 httpd.serve_forever()
