@@ -35,6 +35,23 @@ class HttpCacheTests(unittest.TestCase):
         finally:
             client.close()
 
+    def test_lan_health_check(self):
+        for path in ("/health", "/healthz"):
+            status, headers, payload = self.request(path)
+            self.assertEqual(status, 200)
+            self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+            self.assertEqual(headers["Cache-Control"], "no-store")
+            self.assertEqual(payload, b'{"status":"ok"}')
+            status, _, payload = self.request(path, method="HEAD")
+            self.assertEqual(status, 200)
+            self.assertEqual(payload, b"")
+
+    def test_local_addresses_have_no_loopback(self):
+        from server import local_addresses
+        import ipaddress
+        for address in local_addresses():
+            self.assertFalse(ipaddress.ip_address(address).is_loopback)
+
     def test_html_with_gzip(self):
         status, headers, payload = self.request(headers={"Accept-Encoding": "gzip"})
         self.assertEqual(status, 200)
