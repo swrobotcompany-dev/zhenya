@@ -956,7 +956,7 @@ function updateAmbient(dt){
 }
 function animate(now){
   requestAnimationFrame(animate);
-  if(document.hidden){frameStats.lastRender=0;clock.getDelta();return;}
+  if(document.hidden){frameStats.lastRender=0;frameStats.start=0;frameStats.frames=0;clock.getDelta();return;}
   if(!now)now=performance.now();
   if(frameStats.lastRender && now-frameStats.lastRender<1000/PERF.fps-1)return;
   frameStats.lastRender=now;
@@ -967,7 +967,7 @@ function animate(now){
     frameStats.frames++;
     if(now-frameStats.start>4000){
       const measured=frameStats.frames*1000/(now-frameStats.start);
-      if(measured<34&&PERF.pixelRatio>.75){
+      if(measured<Math.min(34,PERF.fps*.8)&&PERF.pixelRatio>.75){
         PERF.pixelRatio=Math.max(.75,PERF.pixelRatio-.2);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,PERF.pixelRatio));
         renderer.setSize(innerWidth,innerHeight);
