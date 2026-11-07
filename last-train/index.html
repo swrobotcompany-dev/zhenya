@@ -54,21 +54,15 @@ const save=()=>{try{localStorage.setItem(STORAGE,JSON.stringify(s))}catch{}};
 const gain=(name,delta)=>s[name]=Math.max(0,s[name]+delta);
 function checkEnd(){if(s.hp<=0||s.crew<=0){s.gameover=true;s.phase='lost';write('Поезд больше не может продолжать путь. Экспедиция окончена.')} }
 function travel(){
- if(s.gameover||TrainArt.journey?.active||(s.phase!=='station'&&s.phase!=='ready'))return;
+ if(TrainArt.journey?.active||s.gameover||(s.phase!=='station'&&s.phase!=='ready'))return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
- if(startTrainJourney(3300,finishTravel)){
-   $('move').disabled=true;
-   $('search').disabled=true;
-   $('defend').disabled=true;
-   $('reset').disabled=true;
-   $('move').textContent='🚂 Поезд в пути…';
-   $('status').innerHTML='<b class="good">🚂 Поезд набирает скорость. Следующая станция впереди...</b>';
-   $('headerState').textContent='День '+s.day+' • В ПУТИ';
-   $('buildings').querySelectorAll('button').forEach(b=>b.disabled=true);
-   $('upgrades').querySelectorAll('button').forEach(b=>b.disabled=true);
+ const journeyKm=rand(12,24);
+ if(startTrainJourney(5200,()=>finishTravel(journeyKm))){
+   write('Состав отправляется со станции. Впереди '+journeyKm+' км пути.');
+   render();
  }
 }
-function finishTravel(){
+function finishTravel(journeyKm){
  if(s.gameover)return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  gain('fuel',-3);gain('food',-Math.max(1,Math.ceil(s.crew/2)));
@@ -76,10 +70,10 @@ function finishTravel(){
  if(has('Мастерская'))gain('scrap',3);
  if(has('Медпункт'))s.hp=Math.min(100,s.hp+8);
  if(s.food===0){gain('crew',-1);write('Из-за голода погиб один выживший.')}
- s.day++;s.distance+=rand(12,24);s.scavenged=false;
+ s.day++;s.distance+=journeyKm;s.scavenged=false;
  const roll=Math.random();
  if(roll<.38){s.phase='raid';s.attack=rand(4,8)+Math.floor(s.distance/35);write('Мутанты на путях! Нужно отразить нападение.')}
- else{s.phase='station';s.attack=0;write('Найдена заброшенная станция. Можно отправить группу на поиски.');if(roll>.86)event()}
+ else{s.phase='station';s.attack=0;write('Поезд прибыл на заброшенную станцию. Можно отправить группу на поиски.');if(roll>.86)event()}
  checkEnd();render()
 }
 function event(){
@@ -129,17 +123,18 @@ function upgrade(kind){
  render()
 }
 function render(){
- $('headerState').textContent='День '+s.day+' • '+s.distance+' км • '+(s.gameover?'ПОЕЗД ПОТЕРЯН':s.phase==='raid'?'НАПАДЕНИЕ':'СТАНЦИЯ');
+ const traveling=!!TrainArt.journey?.active;
+ $('headerState').textContent='День '+s.day+' • '+s.distance+' км • '+(s.gameover?'ПОЕЗД ПОТЕРЯН':traveling?'В ПУТИ':s.phase==='raid'?'НАПАДЕНИЕ':'СТАНЦИЯ');
  $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
  $('carCount').textContent='— '+s.wagons.length+' ед.';
  $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
- $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b><br><small>Виды: '+[...new Set(Array.from({length:Math.min(s.attack,8)},(_,i)=>MUTANT_KIND[(i+s.day)%MUTANT_KIND.length]))].join(', ')+'</small>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
- $('move').textContent='▶ Продолжить путь';
- $('reset').disabled=false;
- $('move').disabled=s.gameover||s.phase==='raid';$('search').disabled=s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=s.gameover||s.phase!=='raid';
- $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
+ $('status').innerHTML=traveling?'<b class="good">🚂 Поезд движется: разгон, путь и плавное торможение перед следующей станцией.</b>':s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b><br><small>Виды: '+[...new Set(Array.from({length:Math.min(s.attack,8)},(_,i)=>MUTANT_KIND[(i+s.day)%MUTANT_KIND.length]))].join(', ')+'</small>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ $('move').textContent=traveling?'🚂 Поезд в пути…':'▶ Продолжить путь';
+ $('reset').disabled=traveling;$('save').disabled=traveling;
+ $('move').disabled=traveling||s.gameover||s.phase==='raid';$('search').disabled=traveling||s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=traveling||s.gameover||s.phase!=='raid';
+ $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(traveling||s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
  const opts=[['gun','🔫 Улучшить оружие','12 металла',s.scrap>=12],['armor','🛡 Усилить броню','15 металла',s.scrap>=15],['ammo','⚙ Сделать 8 патронов','6 металла',s.scrap>=6],['heal','✚ Починить +25 HP','2 медикамента',s.medicine>=2&&s.hp<100],['recruit','👤 Нанять выжившего','8 металла + 5 еды',s.scrap>=8&&s.food>=5],['trade','⛽ Получить 6 топлива','5 металла',s.scrap>=5]];
- $('upgrades').innerHTML=opts.map(([id,note,cost,ok])=>'<button data-upgrade="'+id+'" '+(s.gameover||s.phase==='raid'||!ok?'disabled':'')+'>'+note+'<span class="desc">'+cost+'</span></button>').join('');
+ $('upgrades').innerHTML=opts.map(([id,note,cost,ok])=>'<button data-upgrade="'+id+'" '+(traveling||s.gameover||s.phase==='raid'||!ok?'disabled':'')+'>'+note+'<span class="desc">'+cost+'</span></button>').join('');
  $('log').innerHTML=s.log.map(x=>'<p>'+escapeHtml(x)+'</p>').join('');
  draw();save()
 }
