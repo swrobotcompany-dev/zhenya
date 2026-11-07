@@ -214,6 +214,82 @@ function trainEngine(g,x,t,state){
   trainLine(g,x+6,344,x+254,344,'#e3b567',3);
   trainLine(g,x+250,342,x+250,358,'#a19b80',3);
 }
+function drawStationBackdrop(g,s,t){
+ if(TrainArt.journey?.active)return;
+ const k=(Number.isInteger(s.stationType)?s.stationType:0)%6;
+ const x=744,y=339;
+ // Distinct world geometry for every type of stopping place.
+ if(k===0){
+   for(let i=0;i<3;i++){
+     const xx=x-15+i*65;
+     trainRect(g,xx,278-(i%2)*15,45,60+(i%2)*15,'#59605a');
+     trainDisc(g,xx+22,278-(i%2)*15,22,'#64695e');
+     trainRect(g,xx+3,308,39,22,'#46534c');
+     trainLine(g,xx+45,315,xx+63,315,'#948977',4);
+     trainRect(g,xx+8,295,6,5,'#a58d6c');
+   }
+   trainRect(g,773,321,119,9,'#876f53');
+   trainText(g,'ТОПЛИВНОЕ ДЕПО',778,315,10,'#eee0bf');
+ }else if(k===1){
+   trainRect(g,x+5,225,158,116,'#7a7d72');
+   trainRect(g,x+60,208,49,17,'#666e68');
+   for(let a=0;a<4;a++)for(let b=0;b<3;b++){
+     trainRect(g,x+18+a*34,239+b*25,20,15,(a+b)%2?'#2d484a':'#3e5859');
+     trainLine(g,x+18+a*34,246+b*25,x+37+a*34,246+b*25,'#afb5a5',1);
+   }
+   trainRect(g,x+70,231,30,28,'#e4dcc4');
+   trainRect(g,x+83,234,6,23,'#a9504c');
+   trainRect(g,x+73,242,24,6,'#a9504c');
+   trainText(g,'ГОСПИТАЛЬ',x+26,332,11,'#f1ead5');
+ }else if(k===2){
+   for(let i=0;i<3;i++){
+     const xx=x-10+i*72,hh=49+i%2*16;
+     trainRect(g,xx,339-hh,61,hh,'#77765f');
+     trainPoly(g,[[xx-7,339-hh],[xx+29,315-hh],[xx+69,339-hh]],'#51544a');
+     trainRect(g,xx+25,339-hh+15,17,19,'#333e3d');
+     trainRect(g,xx+5,339-hh+14,13,12,'#c0a174');
+     trainRect(g,xx+49,315-hh,6,18,'#484d47');
+   }
+ }else if(k===3){
+   trainRect(g,x-6,255,189,83,'#505c59');
+   trainPoly(g,[[x-12,255],[x+24,243],[x+53,255],[x+90,240],[x+123,255],[x+183,246],[x+186,255]],'#68736e');
+   trainRect(g,x+13,198,26,58,'#665f51');
+   trainRect(g,x+124,181,32,74,'#686255');
+   trainRect(g,x+12,215,27,8,'#9e8d73');
+   trainRect(g,x+123,213,34,8,'#b19c78');
+   for(let j=0;j<3;j++){
+     const dx=Math.sin(t*.0006+j)*8;
+     trainDisc(g,x+27+dx+j*13,174-j*23,9+j*4,'rgba(185,179,158,.13)');
+     trainDisc(g,x+137-dx+j*12,158-j*25,11+j*5,'rgba(185,179,158,.11)');
+   }
+   for(let j=0;j<8;j++)trainRect(g,x+7+j*22,280,11,14,'#283c3f');
+ }else if(k===4){
+   trainRect(g,x+6,315,196,22,'#596054');
+   for(let j=0;j<13;j++)trainRound(g,x+5+j*15,322-(j%2)*10,24,13,5,'#8b8065');
+   trainRect(g,x+128,230,8,89,'#555f53');
+   trainRect(g,x+178,230,8,89,'#555f53');
+   trainRect(g,x+120,220,74,16,'#55594a');
+   trainPoly(g,[[x+116,220],[x+150,203],[x+196,220]],'#39423b');
+   trainRect(g,x+138,240,29,23,'#273b3f');
+   trainLine(g,x+134,260,x+176,260,'#b6a67f',2);
+   trainRect(g,x+30,302,70,8,'#333e3b');
+ }else{
+   trainRect(g,x-9,296,152,43,'#596761');
+   trainRect(g,x+2,287,131,10,'#7f8372');
+   for(let j=0;j<5;j++)trainRect(g,x+11+j*25,310,15,13,'#2b4549');
+   trainLine(g,x+150,171,x+150,335,'#8e9287',4);
+   trainLine(g,x+108,316,x+150,171,'#77867c',2);
+   trainLine(g,x+193,316,x+150,171,'#77867c',2);
+   trainLine(g,x+120,258,x+181,258,'#889487',2);
+   trainLine(g,x+130,225,x+172,225,'#889487',2);
+   trainLine(g,x+150,192,x+175,192,'#b2aa8f',2);
+   for(let i=1;i<=2;i++){
+     g.beginPath();g.arc(x+150,214,15*i,-.8,.8);
+     g.strokeStyle='rgba(199,200,175,.5)';g.lineWidth=2;g.stroke();
+   }
+ }
+}
+
 function trainLandscape(g,t,cam,s){
   const travel=TrainArt.worldDistance+TrainArt.movingDistance;
   const sky=trainGradient(g,0,0,960,480,['#111e2b','#344754','#8e8275','#b09674','#494f47']);
@@ -245,6 +321,7 @@ function trainLandscape(g,t,cam,s){
     trainDisc(g,x+29,301,4,'#4b5959');trainDisc(g,x+80,301,4,'#4b5959');
     trainLine(g,x+28,302,x+80,302,'#626760',1);
   }
+  drawStationBackdrop(g,s,t);
   trainRect(g,0,351,960,129,trainGradient(g,0,352,960,128,['#505a4f','#323b39','#242b2c']));
   for(let i=0;i<45;i++){const px=(i*59+trainSeed(i)*47-cam*.42-travel*1.25)%1060;const x=(px+1060)%1060-30;const y=364+trainSeed(i*5)*95;
     trainLine(g,x,y,x+3+trainSeed(i*3)*11,y-2,'rgba(169,167,135,.22)',1);
