@@ -18,23 +18,29 @@ footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 
 .viewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(90deg,#18282c,#2d3b3c,#18282c);border-top:1px solid #4e5d58}
 .viewbar button{font-size:12px;padding:8px 12px;border-color:#616e62;background:#344445}.viewbar span{font-size:12px;letter-spacing:.025em;color:#c9c3aa;text-align:center}
+.station-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.station-options button{text-align:left;min-height:78px;border-color:#8a856b;background:#31443f;line-height:1.2}
+.station-lead{color:#cad3bd;font-size:14px;margin:0 0 10px}
+#stationPanel{border-color:#7f7763;background:linear-gradient(145deg,#293b39,#1c282a)}
+#world.aiming{cursor:crosshair;touch-action:manipulation}
+@media(max-width:800px){.station-options{grid-template-columns:1fr}.station-options button{min-height:54px}}
 .scene{box-shadow:0 13px 34px #060c0c6e}canvas{cursor:grab;touch-action:pan-y;background:#182b32}canvas:active{cursor:grabbing}
 .panel{background:linear-gradient(140deg,#213033,#1a282a);box-shadow:0 8px 20px #0002}
 #stats .stat{background:#2d4241;border:1px solid #42574f}button{transition:background .16s,border-color .16s}
 @media(max-width:650px){.viewbar span{display:none}.viewbar{justify-content:space-between}.viewbar button{flex:1}}
-</style><script src="visuals.js"></script><script src="characters.js"></script></head>
+</style><script src="visuals.js"></script><script src="characters.js"></script><script src="combat.js"></script><script src="stations.js"></script></head>
 <body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
-<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">⚔ Отразить атаку</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
-<div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
+<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">🛡 Автооборона</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
+<div class="panel" style="margin-top:14px" id="stationPanel" aria-live="polite"></div><div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
 <aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав <span id="carCount" style="color:#a9b6aa;font-weight:400"></span></h3><div id="wagons" class="wagons"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Строительство</h2><div class="actions" id="buildings"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Улучшения и экипаж</h2><div class="actions" id="upgrades"></div></div></aside></main>
-<footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. Прогресс хранится в браузере. Люди отображаются в вагонах в соответствии с численностью экипажа.</footer>
+<footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. При нападении нажимайте на зомби на экране, чтобы стрелять. Автооборона — запасной вариант. На каждой остановке выбирайте риск и награду. Прогресс сохраняется автоматически.</footer>
 <script>
 'use strict';
 const STORAGE='last_train_save_v1';
 const BASE_TRAIN=['Локомотив','Тендер','Жилой','Пассажирский','Склад','Кухня','Платформа'];
-const initial=()=>({day:1,distance:0,phase:'station',fuel:22,food:23,scrap:20,medicine:4,ammo:10,hp:100,crew:6,armor:0,gun:1,wagons:[...BASE_TRAIN],trainArtVersion:2,scavenged:false,attack:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
+const initial=()=>({day:1,distance:0,phase:'station',fuel:22,food:23,scrap:20,medicine:4,ammo:24,hp:100,crew:6,armor:0,gun:1,wagons:[...BASE_TRAIN],trainArtVersion:2,scavenged:false,attack:0,wave:null,stationType:0,safePassage:false,kills:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
 const config={farm:{name:'Ферма',cost:15,emoji:'🌿',note:'+4 еды за переход'},med:{name:'Медпункт',cost:18,emoji:'✚',note:'Лечит +8 прочности на переход'},work:{name:'Мастерская',cost:22,emoji:'⚙',note:'+3 металлолома за переход'},guard:{name:'Охранный',cost:25,emoji:'🛡',note:'+2 к силе обороны'}};
 let s;
 try{
@@ -70,10 +76,18 @@ function finishTravel(journeyKm){
  if(has('Мастерская'))gain('scrap',3);
  if(has('Медпункт'))s.hp=Math.min(100,s.hp+8);
  if(s.food===0){gain('crew',-1);write('Из-за голода погиб один выживший.')}
- s.day++;s.distance+=journeyKm;s.scavenged=false;
- const roll=Math.random();
- if(roll<.38){s.phase='raid';s.attack=rand(4,8)+Math.floor(s.distance/35);write('Мутанты на путях! Нужно отразить нападение.')}
- else{s.phase='station';s.attack=0;write('Поезд прибыл на заброшенную станцию. Можно отправить группу на поиски.');if(roll>.86)event()}
+ s.day++;s.distance+=journeyKm;s.scavenged=false;s.wave=null;s.stationType=chooseStation(s.stationType);
+ const roll=s.safePassage?1:(s.day===2?0:Math.random());
+ s.safePassage=false;
+ if(roll<.50){
+   s.phase='raid';s.attack=rand(4,7)+Math.floor(s.distance/70);
+   ensureZombieWave(s);
+   write('ЗОМБИ НА ПУТЯХ! Цельтесь мышью или нажимайте на них пальцем. Можно выбрать автооборону.');
+ }else{
+   s.phase='station';s.attack=0;
+   write('Остановка: '+STATION_TYPES[s.stationType].name+'. Выберите способ исследования.');
+   if(roll>.93)event();
+ }
  checkEnd();render()
 }
 function event(){
@@ -95,16 +109,9 @@ function search(){
  write(msg);checkEnd();render()
 }
 function defend(){
- if(TrainArt.journey?.active)return;
- if(s.phase!=='raid'||s.gameover)return;
- const power=s.crew+2*s.gun+s.armor+(has('Охранный')?2:0);
- const shots=Math.min(s.ammo,Math.max(1,Math.ceil(s.attack/3)));
- gain('ammo',-shots);
- const damage=Math.max(1,(s.attack-power)*5+rand(4,13)-(shots*3));
- gain('hp',-damage);
- write('Атака отбита. Израсходовано '+shots+' патронов, повреждения: '+damage+'.');
- if(s.ammo===0)write('Боеприпасы закончились! Усильте защиту или изготовьте патроны.');
- s.phase='station';s.attack=0;checkEnd();render()
+ if(TrainArt.journey?.active||s.phase!=='raid'||s.gameover)return;
+ ensureZombieWave(s);
+ autoDefendZombieWave(s);
 }
 function build(id){
  if(TrainArt.journey?.active)return;
@@ -123,12 +130,29 @@ function upgrade(kind){
  render()
 }
 function render(){
+ if(s.phase==='raid'&&!s.gameover)ensureZombieWave(s);
  const traveling=!!TrainArt.journey?.active;
  $('headerState').textContent='День '+s.day+' • '+s.distance+' км • '+(s.gameover?'ПОЕЗД ПОТЕРЯН':traveling?'В ПУТИ':s.phase==='raid'?'НАПАДЕНИЕ':'СТАНЦИЯ');
- $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
+ $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun],['☠ Убито зомби',s.kills||0]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
  $('carCount').textContent='— '+s.wagons.length+' ед.';
  $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
- $('status').innerHTML=traveling?'<b class="good">🚂 Поезд движется: разгон, путь и плавное торможение перед следующей станцией.</b>':s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b><br><small>Виды: '+[...new Set(Array.from({length:Math.min(s.attack,8)},(_,i)=>MUTANT_KIND[(i+s.day)%MUTANT_KIND.length]))].join(', ')+'</small>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ $('status').innerHTML=traveling?
+  '<b class="good">🚂 Поезд движется. Впереди неизвестная остановка...</b>':
+  s.gameover?'<b class="bad">Экспедиция окончена. Начните новую игру.</b>':
+  s.phase==='raid'?
+  '<b class="bad">🧟 ЗОМБИ: '+zombieAlive(s)+' — нажимайте на них на картинке, чтобы стрелять!</b> <small>Патроны: '+s.ammo+'. Автооборона доступна кнопкой.</small>':
+  '<b class="good">'+STATION_TYPES[s.stationType].symbol+' '+STATION_TYPES[s.stationType].name+
+  '.</b> <small>'+(s.scavenged?'Разведка на этой остановке завершена.':'Выберите одно действие ниже или быстрый обыск.')+
+  ' Следующий переезд: −3 топлива, −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ const place=STATION_TYPES[s.stationType]||STATION_TYPES[0];
+ $('stationPanel').innerHTML='<h2>'+place.symbol+' '+escapeHtml(place.name)+(s.safePassage?' <span class="good">• безопасный следующий путь</span>':'')+'</h2>'+
+  (s.phase==='raid'&&!s.gameover?
+    '<p class="station-lead">🧟 Зомби приближаются справа! Стреляйте по ним на картинке; разные виды имеют разную скорость, живучесть и силу удара.</p>':
+    '<p class="station-lead">'+escapeHtml(place.description)+'</p>')+
+  '<div class="station-options">'+place.actions.map((a,i)=>'<button data-station="'+i+'" '+(traveling||s.gameover||s.phase!=='station'||s.scavenged||(a.can&&!a.can(s))?'disabled':'')+'>'+a.label+'<span class="desc">'+a.hint+'</span></button>').join('')+'</div>';
+ cv.classList.toggle('aiming',s.phase==='raid'&&!s.gameover);
+
+ $('defend').textContent='🛡 Автооборона'+(s.phase==='raid'?' (с потерями)':'');
  $('move').textContent=traveling?'🚂 Поезд в пути…':'▶ Продолжить путь';
  $('reset').disabled=traveling;$('save').disabled=traveling;
  $('move').disabled=traveling||s.gameover||s.phase==='raid';$('search').disabled=traveling||s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=traveling||s.gameover||s.phase!=='raid';
@@ -146,6 +170,7 @@ $('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
 $('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
 $('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();render()}};
 $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b.dataset.build)};
+$('stationPanel').onclick=e=>{const b=e.target.closest('[data-station]');if(b&&!b.disabled)executeStationChoice(s,Number(b.dataset.station))};
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
 window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
 render();
