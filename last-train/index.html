@@ -54,7 +54,22 @@ const save=()=>{try{localStorage.setItem(STORAGE,JSON.stringify(s))}catch{}};
 const gain=(name,delta)=>s[name]=Math.max(0,s[name]+delta);
 function checkEnd(){if(s.hp<=0||s.crew<=0){s.gameover=true;s.phase='lost';write('Поезд больше не может продолжать путь. Экспедиция окончена.')} }
 function travel(){
- if(s.gameover||s.phase!=='station'&&s.phase!=='ready')return;
+ if(s.gameover||TrainArt.journey?.active||(s.phase!=='station'&&s.phase!=='ready'))return;
+ if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
+ if(startTrainJourney(3300,finishTravel)){
+   $('move').disabled=true;
+   $('search').disabled=true;
+   $('defend').disabled=true;
+   $('reset').disabled=true;
+   $('move').textContent='🚂 Поезд в пути…';
+   $('status').innerHTML='<b class="good">🚂 Поезд набирает скорость. Следующая станция впереди...</b>';
+   $('headerState').textContent='День '+s.day+' • В ПУТИ';
+   $('buildings').querySelectorAll('button').forEach(b=>b.disabled=true);
+   $('upgrades').querySelectorAll('button').forEach(b=>b.disabled=true);
+ }
+}
+function finishTravel(){
+ if(s.gameover)return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  gain('fuel',-3);gain('food',-Math.max(1,Math.ceil(s.crew/2)));
  if(has('Ферма'))gain('food',4);
@@ -75,6 +90,7 @@ function event(){
  if(n===3){gain('medicine',2);write('Найден медицинский шкаф: +2 медикамента.')}
 }
 function search(){
+ if(TrainArt.journey?.active)return;
  if(s.phase!=='station'||s.gameover||s.scavenged)return;
  s.scavenged=true;
  const scrap=rand(5,12),fuel=rand(2,7),food=rand(1,5);
@@ -85,6 +101,7 @@ function search(){
  write(msg);checkEnd();render()
 }
 function defend(){
+ if(TrainArt.journey?.active)return;
  if(s.phase!=='raid'||s.gameover)return;
  const power=s.crew+2*s.gun+s.armor+(has('Охранный')?2:0);
  const shots=Math.min(s.ammo,Math.max(1,Math.ceil(s.attack/3)));
@@ -96,10 +113,12 @@ function defend(){
  s.phase='station';s.attack=0;checkEnd();render()
 }
 function build(id){
+ if(TrainArt.journey?.active)return;
  const b=config[id];if(!b||s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost)return;
  gain('scrap',-b.cost);s.wagons.push(b.name);write('Построен вагон «'+b.name+'».');render()
 }
 function upgrade(kind){
+ if(TrainArt.journey?.active)return;
  if(s.gameover||s.phase==='raid')return;
  if(kind==='gun'&&s.scrap>=12){gain('scrap',-12);s.gun++;write('Улучшено оружие: уровень '+s.gun+'.')}
  else if(kind==='armor'&&s.scrap>=15){gain('scrap',-15);s.armor++;write('Укреплена броня: уровень '+s.armor+'.')}
@@ -115,6 +134,8 @@ function render(){
  $('carCount').textContent='— '+s.wagons.length+' ед.';
  $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
  $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b><br><small>Виды: '+[...new Set(Array.from({length:Math.min(s.attack,8)},(_,i)=>MUTANT_KIND[(i+s.day)%MUTANT_KIND.length]))].join(', ')+'</small>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ $('move').textContent='▶ Продолжить путь';
+ $('reset').disabled=false;
  $('move').disabled=s.gameover||s.phase==='raid';$('search').disabled=s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=s.gameover||s.phase!=='raid';
  $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
  const opts=[['gun','🔫 Улучшить оружие','12 металла',s.scrap>=12],['armor','🛡 Усилить броню','15 металла',s.scrap>=15],['ammo','⚙ Сделать 8 патронов','6 металла',s.scrap>=6],['heal','✚ Починить +25 HP','2 медикамента',s.medicine>=2&&s.hp<100],['recruit','👤 Нанять выжившего','8 металла + 5 еды',s.scrap>=8&&s.food>=5],['trade','⛽ Получить 6 топлива','5 металла',s.scrap>=5]];
@@ -128,7 +149,7 @@ function draw(){drawTrainScene(ctx,s,cv)}
 function randStable(i,a,b){return a+((i*17+23)%(b-a+1))}
 $('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
 $('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
-$('reset').onclick=()=>{if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();render()}};
+$('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();render()}};
 $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b.dataset.build)};
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
 window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
