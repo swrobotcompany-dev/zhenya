@@ -506,8 +506,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(answer)
         except (ValueError,TypeError,KeyError,json.JSONDecodeError) as exc:
             self.send_json({"error":str(exc)},400)
-        except Exception:
-            self.log_error("Unexpected multiplayer server error",exc_info=True)
+        except Exception as exc:
+            self.log_error("Unexpected multiplayer server error: %s", str(exc))
             self.send_json({"error":"Внутренняя ошибка сервера."},500)
 
 
