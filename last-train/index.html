@@ -28,9 +28,39 @@ footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 .panel{background:linear-gradient(140deg,#213033,#1a282a);box-shadow:0 8px 20px #0002}
 #stats .stat{background:#2d4241;border:1px solid #42574f}button{transition:background .16s,border-color .16s}
 @media(max-width:650px){.viewbar span{display:none}.viewbar{justify-content:space-between}.viewbar button{flex:1}}
-</style><script src="visuals.js"></script><script src="scenery.js"></script><script src="characters.js"></script><script src="combat.js"></script><script src="stations.js"></script></head>
+
+#multiplayerPanel{margin:0 0 14px;border-color:#769b85;background:linear-gradient(135deg,#253d3b,#172a2f)}
+#multiplayerPanel h2{font-size:18px}
+.net-controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.net-controls input,#netChatText{min-width:100px;flex:1;background:#17272a;border:1px solid #6e817c;border-radius:7px;padding:10px;color:#f0eee6;font-size:16px}
+.net-controls button{min-height:41px}
+#netSession button{padding:8px 10px}
+#netPlayers{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+.net-player{display:inline-flex;border-radius:18px;background:#314942;padding:5px 12px;border:1px solid #638174;font-size:13px}
+.net-header{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.net-header strong{color:#eed0a2;overflow-wrap:anywhere}
+#netMessages{max-height:140px;overflow-y:auto;border-radius:7px;border:1px solid #405754;padding:7px 10px;margin:8px 0;background:#142629;font-size:13px}
+#netMessages p{margin:3px 0}
+#netHint{font-size:12px;color:#b8c9bd;margin:7px 0}
+#netSetup[hidden],#netSession[hidden],#multiplayerPanel[hidden]{display:none}
+@media(max-width:600px){.net-controls>*{flex-basis:100%}.net-controls input{min-width:0}}
+</style><script src="visuals.js"></script><script src="scenery.js"></script><script src="characters.js"></script><script src="combat.js"></script><script src="stations.js"></script><script src="multiplayer.js"></script></head>
 <body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
-<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">🛡 Автооборона</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
+<main><section><div class="panel" id="multiplayerPanel" hidden>
+<h2>🌐 Сетевая игра • кооператив по Wi-Fi</h2>
+<div id="netSetup">
+ <p class="station-lead">Создайте комнату на одном устройстве и поделитесь её кодом. Все игроки видят общий поезд и вместе отбиваются от зомби.</p>
+ <div class="net-controls"><label for="netName">Ваше имя</label><input id="netName" maxlength="24" placeholder="Имя игрока" autocomplete="nickname"></div>
+ <div class="net-controls"><button type="button" id="netCreate">➕ Создать комнату</button><input id="netRoom" maxlength="6" placeholder="Код комнаты" aria-label="Код комнаты" autocapitalize="characters"><button type="button" id="netJoin">🚂 Войти в комнату</button></div>
+</div>
+<div id="netSession" hidden>
+ <div class="net-header"><strong id="netRoomLabel"></strong><button type="button" id="netLeave">Выйти в одиночный режим</button></div>
+ <div id="netPlayers" aria-label="Игроки в комнате"></div>
+ <div id="netMessages" role="log" aria-label="Чат комнаты"></div>
+ <form id="netChatForm" class="net-controls"><input id="netChatText" maxlength="180" placeholder="Сообщение команде" aria-label="Сообщение команде"><button type="submit">Отправить</button></form>
+</div>
+<p id="netHint" aria-live="polite"></p>
+</div><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">🛡 Автооборона</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
 <div class="panel" style="margin-top:14px" id="stationPanel" aria-live="polite"></div><div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
 <aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав <span id="carCount" style="color:#a9b6aa;font-weight:400"></span></h3><div id="wagons" class="wagons"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Строительство</h2><div class="actions" id="buildings"></div></div>
@@ -59,10 +89,11 @@ const $=id=>document.getElementById(id);
 const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 const has=name=>s.wagons.includes(name);
 const write=message=>{s.log.unshift('День '+s.day+': '+message);s.log=s.log.slice(0,35)};
-const save=()=>{try{localStorage.setItem(STORAGE,JSON.stringify(s))}catch{}};
+const save=()=>{if(window.Multiplayer?.connected)return;try{localStorage.setItem(STORAGE,JSON.stringify(s))}catch{}};
 const gain=(name,delta)=>s[name]=Math.max(0,s[name]+delta);
 function checkEnd(){if(s.hp<=0||s.crew<=0){s.gameover=true;s.phase='lost';write('Поезд больше не может продолжать путь. Экспедиция окончена.')} }
 function travel(){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('travel');return}
  if(TrainArt.journey?.active||s.gameover||(s.phase!=='station'&&s.phase!=='ready'))return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  const journeyKm=rand(12,24);
@@ -102,6 +133,7 @@ function event(){
  if(n===3){gain('medicine',2);write('Найден медицинский шкаф: +2 медикамента.')}
 }
 function search(){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('search');return}
  if(TrainArt.journey?.active)return;
  if(s.phase!=='station'||s.gameover||s.scavenged)return;
  s.scavenged=true;
@@ -113,16 +145,19 @@ function search(){
  write(msg);checkEnd();render()
 }
 function defend(){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('auto');return}
  if(TrainArt.journey?.active||s.phase!=='raid'||s.gameover)return;
  ensureZombieWave(s);
  autoDefendZombieWave(s);
 }
 function build(id){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('build',{kind:id});return}
  if(TrainArt.journey?.active)return;
  const b=config[id];if(!b||s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost)return;
  gain('scrap',-b.cost);s.wagons.push(b.name);write('Построен вагон «'+b.name+'».');render()
 }
 function upgrade(kind){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('upgrade',{kind});return}
  if(TrainArt.journey?.active)return;
  if(s.gameover||s.phase==='raid')return;
  if(kind==='gun'&&s.scrap>=12){gain('scrap',-12);s.gun++;write('Улучшено оружие: уровень '+s.gun+'.')}
@@ -158,6 +193,7 @@ function render(){
 
  $('defend').textContent='🛡 Автооборона'+(s.phase==='raid'?' (с потерями)':'');
  $('move').textContent=traveling?'🚂 Поезд в пути…':'▶ Продолжить путь';
+ $('save').textContent=window.Multiplayer?.connected?'🔄 Обновить':'💾 Сохранить';
  $('reset').disabled=traveling;$('save').disabled=traveling;
  $('move').disabled=traveling||s.gameover||s.phase==='raid';$('search').disabled=traveling||s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=traveling||s.gameover||s.phase!=='raid';
  $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(traveling||s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
@@ -171,12 +207,13 @@ const cv=$('world'),ctx=cv.getContext('2d');
 function draw(){drawTrainScene(ctx,s,cv)}
 function randStable(i,a,b){return a+((i*17+23)%(b-a+1))}
 $('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
-$('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
-$('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();TrainArt.worldDistance=0;TrainArt.movingDistance=0;TrainArt.wheelRotation=0;TrainArt.camera=trainCameraBounds(s).max;TrainArt.target=TrainArt.camera;render()}};
+$('save').onclick=()=>{if(window.Multiplayer?.connected){window.Multiplayer.refresh();return}save();write('Сохранение выполнено.');render()};
+$('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm(window.Multiplayer?.connected?'Перезапустить общую экспедицию для ВСЕХ игроков?':'Начать новую экспедицию? Текущий прогресс будет удалён.')){if(window.Multiplayer?.connected){window.Multiplayer.action('reset');return}s=initial();TrainArt.worldDistance=0;TrainArt.movingDistance=0;TrainArt.wheelRotation=0;TrainArt.camera=trainCameraBounds(s).max;TrainArt.target=TrainArt.camera;render()}};
 $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b.dataset.build)};
 $('stationPanel').onclick=e=>{const b=e.target.closest('[data-station]');if(b&&!b.disabled)executeStationChoice(s,Number(b.dataset.station))};
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
-window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
+window.addEventListener('keydown',e=>{if(e.target.matches('input,textarea,[contenteditable]')||e.target.isContentEditable)return;if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
 startTrainView(cv,()=>s);
 render();
+window.Multiplayer.init();
 </script></body></html>
