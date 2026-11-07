@@ -177,6 +177,6 @@ $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b
 $('stationPanel').onclick=e=>{const b=e.target.closest('[data-station]');if(b&&!b.disabled)executeStationChoice(s,Number(b.dataset.station))};
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
 window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
-render();
 startTrainView(cv,()=>s);
+render();
 </script></body></html>
