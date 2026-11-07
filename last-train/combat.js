@@ -11,6 +11,7 @@ const ZOMBIE_STATS=[
 const WAVE_FRONT=ENGINE_X+262;
 const AttackFX={shot:null,feedback:'',feedbackAt:0,lastShot:0,lastUpdate:0,hitFlash:0};
 function ensureZombieWave(state){
+  if(window.Multiplayer?.connected)return;
   if(state.gameover||state.phase!=='raid')return;
   if(state.wave&&Array.isArray(state.wave.enemies)&&state.wave.enemies.length)return;
   const n=Math.min(9,4+Math.floor(Math.max(0,state.distance)/65));
@@ -36,6 +37,7 @@ function finishZombieWave(state){
   if(typeof render==='function')render();
 }
 function updateZombieWave(state,ms){
+  if(window.Multiplayer?.connected)return;
   if(state.gameover||state.phase!=='raid'||document.hidden||TrainArt.journey?.active)return;
   ensureZombieWave(state);
   if(!AttackFX.lastUpdate){AttackFX.lastUpdate=ms;return}
@@ -65,6 +67,7 @@ function updateZombieWave(state,ms){
   if(changed&&typeof render==='function')render();
 }
 function aimZombieOnCanvas(state,x,y){
+  if(window.Multiplayer?.connected)return window.Multiplayer.shoot(x,y);
   if(state.gameover||state.phase!=='raid'||TrainArt.journey?.active)return false;
   ensureZombieWave(state);
   const ms=performance.now();
@@ -105,6 +108,7 @@ function aimZombieOnCanvas(state,x,y){
   return true;
 }
 function autoDefendZombieWave(state){
+  if(window.Multiplayer?.connected)return window.Multiplayer.action('auto');
   if(!state.wave)return false;
   const foes=zombieAlive(state),shots=Math.min(state.ammo,Math.max(1,Math.ceil(foes*.8)));
   state.ammo-=shots;
