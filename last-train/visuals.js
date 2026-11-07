@@ -215,7 +215,10 @@ function trainEngine(g,x,t,state){
   trainLine(g,x+250,342,x+250,358,'#a19b80',3);
 }
 function drawStationBackdrop(g,s,t){
- if(TrainArt.journey?.active)return;
+ // The departure platform stays rooted in the world and recedes behind the train.
+ const leaving=TrainArt.journey?.active ? -TrainArt.movingDistance*1.12 : 0;
+ if(leaving<-1060)return;
+ g.save();g.translate(leaving,0);
  const k=(Number.isInteger(s.stationType)?s.stationType:0)%6;
  const x=744,y=339;
  // Distinct world geometry for every type of stopping place.
@@ -288,6 +291,23 @@ function drawStationBackdrop(g,s,t){
      g.strokeStyle='rgba(199,200,175,.5)';g.lineWidth=2;g.stroke();
    }
  }
+ g.restore();
+}
+
+// Stable world-space hills: near layers move faster to the left than distant ones.
+function trainRidge(g,offset,baseline,span,height,color){
+  const start=Math.floor(offset/span)-2;
+  const end=start+Math.ceil(960/span)+5;
+  g.beginPath();
+  g.moveTo(-span,baseline+100);
+  for(let i=start;i<=end;i++){
+    const x=i*span-offset;
+    const peak=height*(.6+trainSeed(i*47+13)*.8);
+    g.lineTo(x,baseline);
+    g.lineTo(x+span*.45,baseline-peak);
+    g.lineTo(x+span,baseline);
+  }
+  g.lineTo(1100,baseline+100);g.closePath();g.fillStyle=color;g.fill();
 }
 
 function trainLandscape(g,t,cam,s){
@@ -302,11 +322,13 @@ function trainLandscape(g,t,cam,s){
     g.fillStyle='rgba(204,199,177,.075)';
     g.beginPath();g.ellipse(xx,78+(i%3)*34,92+(i%4)*19,14+(i%3)*5,0,0,Math.PI*2);g.fill();
   }
-  trainPoly(g,[[0,282],[100,220],[195,261],[309,195],[437,266],[582,210],[715,260],[845,181],[960,268],[960,370],[0,370]],'#465d60');
-  trainPoly(g,[[0,320],[170,274],[301,302],[460,250],[570,299],[721,261],[879,284],[960,255],[960,390],[0,390]],'#344b50');
-  const par=(cam*.10+s.distance*7+travel*.42)%132;
-  for(let i=-2;i<12;i++){
-    const n=i+6;const bx=i*132-par;
+  trainRidge(g,cam*.012+travel*.045,285,185,80,'#465d60');
+  trainRidge(g,cam*.035+travel*.12,326,155,66,'#344b50');
+  const buildingOffset=cam*.08+travel*.42;
+  const firstBuilding=Math.floor(buildingOffset/132)-2;
+  for(let k=0;k<13;k++){
+    const n=firstBuilding+k;
+    const bx=n*132-buildingOffset;
     const height=54+Math.floor(trainSeed(n+13)*97),wide=51+Math.floor(trainSeed(n+88)*48);
     trainRect(g,bx,344-height,wide,height,'#2e4245');
     trainPoly(g,[[bx-6,344-height+4],[bx+13,344-height-12],[bx+wide-10,344-height-5],[bx+wide+4,344-height+7]],'#304346');
@@ -314,9 +336,11 @@ function trainLandscape(g,t,cam,s){
       trainRect(g,bx+8+c*16,357-height+r*17,6,9,trainSeed(n*13+c+r)>.79?'#aa8661':'#203338');
     }
   }
-  let p=(cam*.22+travel*.94)%186;
-  for(let i=-2;i<8;i++){
-    const x=i*186-p;trainLine(g,x+55,292,x+55,363,'#273b3e',5);
+  const poleOffset=cam*.18+travel*.94;
+  const firstPole=Math.floor(poleOffset/186)-1;
+  for(let k=0;k<9;k++){
+    const i=firstPole+k;
+    const x=i*186-poleOffset;trainLine(g,x+55,292,x+55,363,'#273b3e',5);
     trainLine(g,x+28,301,x+81,301,'#2e4245',4);
     trainDisc(g,x+29,301,4,'#4b5959');trainDisc(g,x+80,301,4,'#4b5959');
     trainLine(g,x+28,302,x+80,302,'#626760',1);
@@ -326,8 +350,11 @@ function trainLandscape(g,t,cam,s){
   for(let i=0;i<45;i++){const px=(i*59+trainSeed(i)*47-cam*.42-travel*1.25)%1060;const x=(px+1060)%1060-30;const y=364+trainSeed(i*5)*95;
     trainLine(g,x,y,x+3+trainSeed(i*3)*11,y-2,'rgba(169,167,135,.22)',1);
   }
-  for(let i=-1;i<35;i++){
-    const x=i*35-((cam*.48+travel*1.65)%35);
+  const sleeperOffset=cam*.28+travel*1.65;
+  const sleeperStart=Math.floor(sleeperOffset/35)-1;
+  for(let k=0;k<34;k++){
+    const i=sleeperStart+k;
+    const x=i*35-sleeperOffset;
     trainPoly(g,[[x,408],[x+19,408],[x+32,463],[x+6,463]],'#564f42');
     trainLine(g,x+4,411,x+25,454,'#7e7060',1);
   }
@@ -336,14 +363,17 @@ function trainLandscape(g,t,cam,s){
   trainRect(g,0,450,960,7,'#212929');
   trainLine(g,0,452,960,452,'#7c8884',2);
   trainLine(g,0,413,960,413,'rgba(13,22,25,.48)',3);
-  if(s.phase==='station'&&!TrainArt.journey?.active){
-    const platformX=125-((cam*.14+travel*.2)%650);
+  if(s.phase==='station'){
+    const departDistance=TrainArt.journey?.active?TrainArt.movingDistance*1.12:0;
+    const platformX=125-(cam*.14%650)-departDistance;
+    if(platformX>-250){
     trainRect(g,platformX,343,240,11,'#555c56');
     trainRect(g,platformX+12,291,8,50,'#3a4441');
     trainRect(g,platformX+3,282,101,21,'#3b4744');
     const sign=typeof STATION_TYPES!=='undefined'?(STATION_TYPES[s.stationType]||STATION_TYPES[0]).name:'СТАНЦИЯ';
     trainText(g,sign.slice(0,15).toUpperCase(),platformX+10,296,11,'#e0c99c');
     trainRect(g,platformX+110,324,33,22,'#514e44');
+    }
   }
   for(let i=0;i<55;i++){
     const x=(i*139+trainSeed(i*31)*690+Math.sin(t*.0002+i)*18)%1010;
@@ -400,8 +430,10 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   TrainArt.crewAssignments=assignTrainCrew(state);
   const speed=TrainArt.travelSpeed;
   const bump=TrainArt.journey?.active?Math.sin(ms*.07)*speed*1.65:0;
+  // Engine briefly pulls ahead while the camera follows, without sliding backward in world space.
+  const cameraLag=TrainArt.journey?.active?Math.sin(Math.PI*TrainArt.journey.progress)*65:0;
   g.save();
-  g.translate(0,bump);
+  g.translate(cameraLag,bump);
   for(let i=state.wagons.length-1;i>=0;i--){
     const x=ENGINE_X-i*TRAIN_GAP-TrainArt.camera;
     if(x<-280||x>980)continue;
@@ -410,9 +442,11 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   }
   g.restore();
   if(TrainArt.journey?.active){
-    // Near-track dust and streaks are intentionally lightweight (no sprites).
+    // Dust streaks follow the track backwards; the train is moving right.
+    const travel=TrainArt.worldDistance+TrainArt.movingDistance;
     for(let i=0;i<18;i++){
-      const x=(i*87+ms*.08*speed)%1120-80;
+      const phase=(i*83-travel*1.6)%1100;
+      const x=(phase+1100)%1100-80;
       const y=401+(i%4)*11;
       trainLine(g,x,y,x-10-speed*22,y,'rgba(213,201,163,'+(speed*.17)+')',1+(i%2));
     }
