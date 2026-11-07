@@ -22,14 +22,14 @@ footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 .panel{background:linear-gradient(140deg,#213033,#1a282a);box-shadow:0 8px 20px #0002}
 #stats .stat{background:#2d4241;border:1px solid #42574f}button{transition:background .16s,border-color .16s}
 @media(max-width:650px){.viewbar span{display:none}.viewbar{justify-content:space-between}.viewbar button{flex:1}}
-</style><script src="visuals.js"></script></head>
+</style><script src="visuals.js"></script><script src="characters.js"></script></head>
 <body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
 <main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">⚔ Отразить атаку</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
 <div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
 <aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав <span id="carCount" style="color:#a9b6aa;font-weight:400"></span></h3><div id="wagons" class="wagons"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Строительство</h2><div class="actions" id="buildings"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Улучшения и экипаж</h2><div class="actions" id="upgrades"></div></div></aside></main>
-<footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. Прогресс хранится в браузере.</footer>
+<footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. Прогресс хранится в браузере. Люди отображаются в вагонах в соответствии с численностью экипажа.</footer>
 <script>
 'use strict';
 const STORAGE='last_train_save_v1';
@@ -114,7 +114,7 @@ function render(){
  $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
  $('carCount').textContent='— '+s.wagons.length+' ед.';
  $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
- $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b><br><small>Виды: '+[...new Set(Array.from({length:Math.min(s.attack,8)},(_,i)=>MUTANT_KIND[(i+s.day)%MUTANT_KIND.length]))].join(', ')+'</small>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
  $('move').disabled=s.gameover||s.phase==='raid';$('search').disabled=s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=s.gameover||s.phase!=='raid';
  $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
  const opts=[['gun','🔫 Улучшить оружие','12 металла',s.scrap>=12],['armor','🛡 Усилить броню','15 металла',s.scrap>=15],['ammo','⚙ Сделать 8 патронов','6 металла',s.scrap>=6],['heal','✚ Починить +25 HP','2 медикамента',s.medicine>=2&&s.hp<100],['recruit','👤 Нанять выжившего','8 металла + 5 еды',s.scrap>=8&&s.food>=5],['trade','⛽ Получить 6 топлива','5 металла',s.scrap>=5]];
