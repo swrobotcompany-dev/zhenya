@@ -70,6 +70,7 @@ function trainWagon(g,name,index,x,state,t){
     for(let i=0;i<4;i++){const bx=x+17+i*52;trainRect(g,bx,287+(i%2)*10,44,32,'#7b6549');trainLine(g,bx+4,294,bx+36,313,'#b69b71',2);trainLine(g,bx+36,294,bx+4,313,'#b69b71',2)}
     trainLine(g,x+5,281,x+5,319,'#a0a39a',3);trainLine(g,x+249,281,x+249,319,'#a0a39a',3);
     trainText(g,'ГРУЗОВАЯ ПЛАТФОРМА',x+34,346,10,'#e5cda4');
+    drawPlatformCrew(g,x,state,index,t);
     return;
   }
   if(is('Тендер')){
@@ -90,6 +91,7 @@ function trainWagon(g,name,index,x,state,t){
     trainRect(g,x+13,288,230,31,'#425e59');
     for(let i=0;i<8;i++){trainLine(g,x+24+i*29,247,x+24+i*29,319,'#9ab2a4',2);const xx=x+20+i*28;trainLine(g,xx,304,xx,279,'#6c9d55',2);trainDisc(g,xx-4,289,5,'#73ab65');trainDisc(g,xx+5,283,5,'#91b47a')}
     trainRect(g,x+12,317,232,25,'#3e5550');trainText(g,'GREENHOUSE / ТЕПЛИЦА',x+30,335,11,'#d9e9c8');
+    drawFarmCrew(g,x,state,index,t);
     return;
   }
   trainRound(g,x+4,y,w-8,h,6,trainGradient(g,x,y,w,h,color),'#1d2928');
@@ -103,20 +105,26 @@ function trainWagon(g,name,index,x,state,t){
     trainLine(g,x+122,269,x+122,330,'#a39a83',3);
     trainText(g,'МАТЕРИАЛЫ',x+69,291,12,'#e2d5b3');
     trainText(g,'CARGO 07',x+69,308,10,'#a9b8a9');
+    drawDoorCrew(g,x,state,index,t);
   }else if(is('Мастерская')){
     trainWindow(g,x+28,264,47,36,true);
+    const workshopCrew=(TrainArt.crewAssignments||{})[index]||[];
+    if(workshopCrew[0])drawCrewInWindow(g,x+28,264,47,36,workshopCrew[0].role,workshopCrew[0].seed,t);
     trainRound(g,x+92,261,71,75,4,'#424947','#9c9783');
     for(let k=0;k<5;k++)trainLine(g,x+101+k*12,266,x+101+k*12,331,'#2b3635',2);
     trainWindow(g,x+189,264,34,34,false);
+    if(workshopCrew[1])drawCrewInWindow(g,x+189,264,34,34,workshopCrew[1].role,workshopCrew[1].seed,t);
     trainText(g,'WORKSHOP',x+28,329,13,'#e1c99e');
     trainRect(g,x+199,213,11,13,'#3c4543');
   }else{
     const isMed=is('Медпункт');
     const isKitchen=is('Кухня');
     const slots=isKitchen?3:4;
+    const interiorCrew=(TrainArt.crewAssignments||{})[index]||[];
     for(let k=0;k<slots;k++){
       const wx=x+19+k*(isKitchen?67:54);
       trainWindow(g,wx,265,isKitchen?43:38,36,(k+index)%3===0||isKitchen);
+      if(interiorCrew[k] && !(is('Охранный') && k===0))drawCrewInWindow(g,wx,265,isKitchen?43:38,36,interiorCrew[k].role,interiorCrew[k].seed,t);
       if(!isMed&&k===1)trainLine(g,wx+10,284,wx+28,274,'#afc5bb',1);
     }
     if(isMed){trainRound(g,x+197,265,36,40,3,'#e5dfc6');trainRect(g,x+210,270,10,31,'#a74d48');trainRect(g,x+200,280,30,10,'#a74d48')}
@@ -127,6 +135,7 @@ function trainWagon(g,name,index,x,state,t){
       trainPoly(g,[[x+109,199],[x+146,199],[x+164,212],[x+94,212]],'#59665e');
       trainRect(g,x+139,204,77,5,'#272e2e');
       trainText(g,'СТРАЖА',x+22,332,11,'#e1c49b');
+      if(interiorCrew[0])drawTrainPerson(g,x+127,210,.84,interiorCrew[0].role,interiorCrew[0].seed,t);
     }else trainText(g,is('Медпункт')?'МЕДИЦИНСКИЙ':isKitchen?'ВАГОН-КУХНЯ':is('Жилой')?'ЖИЛОЙ ВАГОН':is('Пассажирский')?'ПАССАЖИРСКИЙ':name.toUpperCase(),x+18,331,11,'#e7dec0');
   }
   trainScratches(g,x+5,y,w-10,h,index+5);
@@ -146,6 +155,8 @@ function trainEngine(g,x,t,state){
   trainPoly(g,[[x+175,241],[x+221,241],[x+235,257],[x+235,283],[x+175,283]],'#263b41','#9daaa2',2);
   trainPoly(g,[[x+180,245],[x+196,245],[x+196,278],[x+180,278]],'#68949b');
   trainPoly(g,[[x+200,245],[x+217,245],[x+230,259],[x+230,278],[x+200,278]],'#7da4a6');
+  const engineer=(TrainArt.crewAssignments||{})[0]||[];
+  if(engineer[0])drawCrewInWindow(g,x+201,246,28,31,engineer[0].role,engineer[0].seed,t);
   trainLine(g,x+198,242,x+198,283,'#1b2f33',4);
   trainLine(g,x+183,278,x+194,250,'#d8d6b9',1);
   trainDisc(g,x+233,304,7,'#d2bb80');
@@ -222,20 +233,9 @@ function trainLandscape(g,t,cam,s){
   }
 }
 function trainAttack(g,cam,s,t){
-  if(s.phase!=='raid'||s.gameover)return;
-  const n=Math.min(s.attack,10);
-  for(let i=0;i<n;i++){
-    const x=ENGINE_X+286+i*29-cam+Math.sin(t*.003+i)*3;
-    if(x<-40||x>1000)continue;
-    const y=360+(i%3)*8;
-    trainDisc(g,x,y-29,10,'#66735b');
-    trainRect(g,x-8,y-21,16,27,'#4a5b4b');
-    trainLine(g,x-6,y+5,x-12,y+26,'#35483f',4);
-    trainLine(g,x+5,y+5,x+11,y+26,'#35483f',4);
-    trainLine(g,x-7,y-15,x-18,y+1,'#687b5a',4);
-    trainDisc(g,x+4,y-32,2,'#ed9864');
-  }
+  drawMutantHorde(g,cam,s,t);
 }
+
 function trainOverlay(g,s,cam){
   trainRound(g,16,14,265,67,8,'rgba(17,28,31,.86)','#728078');
   trainText(g,'ПОСЛЕДНИЙ ПОЕЗД',29,42,19,'#e6c89b');
@@ -254,7 +254,7 @@ function trainOverlay(g,s,cam){
   if(s.gameover){trainRect(g,0,0,960,480,'rgba(8,15,17,.79)');trainText(g,'ПОЕЗД ПОТЕРЯН',312,226,36,'#f1b1a2');trainText(g,'Начните новую экспедицию',347,264,17,'#e1dfd2',500)}
 }
 function trainCameraBounds(state){
-  const max=ENGINE_X-540;
+  const max=ENGINE_X-(state.phase==='raid'?300:540);
   return {min:Math.min(max,ENGINE_X-Math.max(0,state.wagons.length-1)*TRAIN_GAP-60),max};
 }
 function trainClamp(v,min,max){return Math.max(min,Math.min(max,v))}
@@ -264,6 +264,7 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   TrainArt.camera+=(TrainArt.target-TrainArt.camera)*.15;
   g.clearRect(0,0,canvas.width,canvas.height);
   trainLandscape(g,ms,TrainArt.camera,state);
+  TrainArt.crewAssignments=assignTrainCrew(state);
   for(let i=state.wagons.length-1;i>=0;i--){
     const x=ENGINE_X-i*TRAIN_GAP-TrainArt.camera;
     if(x<-280||x>980)continue;
