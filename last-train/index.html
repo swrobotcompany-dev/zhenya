@@ -28,7 +28,7 @@ footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 .panel{background:linear-gradient(140deg,#213033,#1a282a);box-shadow:0 8px 20px #0002}
 #stats .stat{background:#2d4241;border:1px solid #42574f}button{transition:background .16s,border-color .16s}
 @media(max-width:650px){.viewbar span{display:none}.viewbar{justify-content:space-between}.viewbar button{flex:1}}
-</style><script src="visuals.js"></script><script src="characters.js"></script><script src="combat.js"></script><script src="stations.js"></script></head>
+</style><script src="visuals.js"></script><script src="scenery.js"></script><script src="characters.js"></script><script src="combat.js"></script><script src="stations.js"></script></head>
 <body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
 <main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">🛡 Автооборона</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
 <div class="panel" style="margin-top:14px" id="stationPanel" aria-live="polite"></div><div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
@@ -40,12 +40,15 @@ footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 'use strict';
 const STORAGE='last_train_save_v1';
 const BASE_TRAIN=['Локомотив','Тендер','Жилой','Пассажирский','Склад','Кухня','Платформа'];
-const initial=()=>({day:1,distance:0,phase:'station',fuel:22,food:23,scrap:20,medicine:4,ammo:24,hp:100,crew:6,armor:0,gun:1,wagons:[...BASE_TRAIN],trainArtVersion:2,scavenged:false,attack:0,wave:null,stationType:0,safePassage:false,kills:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
+const initial=()=>({day:1,distance:0,worldPosition:0,phase:'station',fuel:22,food:23,scrap:20,medicine:4,ammo:24,hp:100,crew:6,armor:0,gun:1,wagons:[...BASE_TRAIN],trainArtVersion:2,scavenged:false,attack:0,wave:null,stationType:0,safePassage:false,kills:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
 const config={farm:{name:'Ферма',cost:15,emoji:'🌿',note:'+4 еды за переход'},med:{name:'Медпункт',cost:18,emoji:'✚',note:'Лечит +8 прочности на переход'},work:{name:'Мастерская',cost:22,emoji:'⚙',note:'+3 металлолома за переход'},guard:{name:'Охранный',cost:25,emoji:'🛡',note:'+2 к силе обороны'}};
 let s;
 try{
  const saved=JSON.parse(localStorage.getItem(STORAGE));
  s=saved&&Array.isArray(saved.wagons)?{...initial(),...saved}:initial();
+ // Older saved games did not track world coordinates. Assign an approximate stable start.
+ if(saved&&Array.isArray(saved.wagons)&&!Number.isFinite(saved.worldPosition))
+   s.worldPosition=Math.max(0,Number(s.distance)||0)*130;
  if(saved&&Array.isArray(saved.wagons)&&(!saved.trainArtVersion||saved.trainArtVersion<2)){
    s.wagons=[...BASE_TRAIN,...saved.wagons.filter(w=>!BASE_TRAIN.includes(w))];
    s.trainArtVersion=2;
@@ -64,8 +67,7 @@ function travel(){
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  const journeyKm=rand(12,24);
  const destinationType=chooseStation(s.stationType);
- if(startTrainJourney(5200,()=>finishTravel(journeyKm,destinationType))){
-   TrainArt.journey.destinationType=destinationType;
+ if(startTrainJourney(5200,()=>finishTravel(journeyKm,destinationType),{from:s.stationType,to:destinationType})){
    write('Состав отправляется со станции. Впереди '+journeyKm+' км пути.');
    render();
  }
@@ -78,7 +80,7 @@ function finishTravel(journeyKm,destinationType){
  if(has('Мастерская'))gain('scrap',3);
  if(has('Медпункт'))s.hp=Math.min(100,s.hp+8);
  if(s.food===0){gain('crew',-1);write('Из-за голода погиб один выживший.')}
- s.day++;s.distance+=journeyKm;s.scavenged=false;s.wave=null;s.stationType=destinationType;
+ s.day++;s.distance+=journeyKm;s.worldPosition=TrainArt.worldDistance;s.scavenged=false;s.wave=null;s.stationType=destinationType;
  const roll=s.safePassage?1:(s.day===2?0:Math.random());
  s.safePassage=false;
  if(roll<.50){
@@ -170,7 +172,7 @@ function draw(){drawTrainScene(ctx,s,cv)}
 function randStable(i,a,b){return a+((i*17+23)%(b-a+1))}
 $('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
 $('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
-$('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();render()}};
+$('reset').onclick=()=>{if(TrainArt.journey?.active)return;if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();TrainArt.worldDistance=0;TrainArt.movingDistance=0;TrainArt.wheelRotation=0;TrainArt.camera=trainCameraBounds(s).max;TrainArt.target=TrainArt.camera;render()}};
 $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b.dataset.build)};
 $('stationPanel').onclick=e=>{const b=e.target.closest('[data-station]');if(b&&!b.disabled)executeStationChoice(s,Number(b.dataset.station))};
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
