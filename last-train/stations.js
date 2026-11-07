@@ -34,6 +34,7 @@ function chooseStation(prev){
  return (p+1+Math.floor(Math.random()*(STATION_TYPES.length-1)))%STATION_TYPES.length
 }
 function executeStationChoice(s,index){
+ if(window.Multiplayer?.connected){window.Multiplayer.action('station',{choice:index});return true}
  if(!s||s.phase!=='station'||s.gameover||s.scavenged||TrainArt.journey?.active)return false;
  const place=STATION_TYPES[s.stationType]||STATION_TYPES[0];
  const action=place.actions[index];
