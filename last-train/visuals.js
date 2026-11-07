@@ -291,7 +291,7 @@ function trainOverlay(g,s,cam){
     trainRect(g,x+1,57,5,2,'#283735');
   }
   trainRound(g,14,442,325,26,5,'rgba(15,26,27,.78)');
-  trainText(g,'⇆ Тяни мышью или кнопками • осмотр состава',25,460,11,'#c5cabe',500);
+  trainText(g,s.phase==='raid'?'🎯 Целься по зомби и стреляй нажатием':'⇆ Тяни мышью или кнопками • осмотр состава',25,460,11,'#c5cabe',500);
   const journey=TrainArt.journey;
   if(journey?.active){
     trainRound(g,344,83,273,64,9,'rgba(23,37,39,.9)','#8b9a81');
@@ -300,7 +300,7 @@ function trainOverlay(g,s,cam){
     trainRect(g,360,136,242,5,'#293e3f');
     trainRect(g,360,136,242*journey.progress,5,'#d4a56d');
   }
-  if(s.phase==='raid'&&!s.gameover){trainRound(g,360,94,260,36,8,'rgba(96,38,35,.92)','#d69b73');trainText(g,'⚠ НАПАДЕНИЕ МУТАНТОВ',379,117,17,'#ffe1c2')}
+  // Combat HUD is rendered by drawZombieWave; do not cover its aim instruction.
   if(s.gameover){trainRect(g,0,0,960,480,'rgba(8,15,17,.79)');trainText(g,'ПОЕЗД ПОТЕРЯН',312,226,36,'#f1b1a2');trainText(g,'Начните новую экспедицию',347,264,17,'#e1dfd2',500)}
 }
 function trainCameraBounds(state){
