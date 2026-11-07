@@ -390,9 +390,12 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   trainLandscape(g,ms,TrainArt.camera,state);
   // Even between combat encounters, infected silhouettes are visible beyond the rails.
   if(state.phase==='station'&&!TrainArt.journey?.active&&!state.gameover){
-    drawVariantMutant(g,(state.day+2)%6,852+Math.sin(ms*.0009)*15,344,.39,ms,13+state.day);
-    drawVariantMutant(g,(state.day+4)%6,925+Math.sin(ms*.0011)*11,347,.31,ms,29+state.day);
-    trainText(g,'ЗАРАЖЁННЫЕ ВДАЛИ',755,260,12,'#ded6bf');
+    // Distant infected belong to the station ground, not to the camera/viewport.
+    const groundShift=(TrainArt.camera-960);
+    const x1=852-groundShift,x2=925-groundShift;
+    if(x1>-80&&x1<1050)drawVariantMutant(g,(state.day+2)%6,x1+Math.sin(ms*.0009)*15,344,.39,ms,13+state.day);
+    if(x2>-80&&x2<1050)drawVariantMutant(g,(state.day+4)%6,x2+Math.sin(ms*.0011)*11,347,.31,ms,29+state.day);
+    if(x1>-80&&x1<1000)trainText(g,'ЗАРАЖЁННЫЕ ВДАЛИ',755-groundShift,260,12,'#ded6bf');
   }
   TrainArt.crewAssignments=assignTrainCrew(state);
   const speed=TrainArt.travelSpeed;
