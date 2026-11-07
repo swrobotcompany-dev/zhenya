@@ -30,7 +30,7 @@ function zombieAlive(state){
 function finishZombieWave(state){
   const k=state.wave?.kills||0;
   state.attack=0;state.wave=null;state.phase='station';
-  state.scavenged=false;
+  // Preserve whether this stop was already searched before the raid.
   if(typeof write==='function')write('Атака отбита! Уничтожено зомби: '+k+'. Теперь можно исследовать станцию.');
   AttackFX.feedback='УГРОЗА УСТРАНЕНА';AttackFX.feedbackAt=performance.now();
   if(typeof render==='function')render();
