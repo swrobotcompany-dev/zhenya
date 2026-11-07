@@ -254,8 +254,8 @@ function trainOverlay(g,s,cam){
   if(s.gameover){trainRect(g,0,0,960,480,'rgba(8,15,17,.79)');trainText(g,'ПОЕЗД ПОТЕРЯН',312,226,36,'#f1b1a2');trainText(g,'Начните новую экспедицию',347,264,17,'#e1dfd2',500)}
 }
 function trainCameraBounds(state){
-  return {min:ENGINE_X-Math.max(0,state.wagons.length-1)*TRAIN_GAP-60,
-          max:ENGINE_X-540};
+  const max=ENGINE_X-540;
+  return {min:Math.min(max,ENGINE_X-Math.max(0,state.wagons.length-1)*TRAIN_GAP-60),max};
 }
 function trainClamp(v,min,max){return Math.max(min,Math.min(max,v))}
 function drawTrainScene(g,state,canvas,ms=performance.now()){
