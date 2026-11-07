@@ -2,8 +2,42 @@
 'use strict';
 const TrainArt = {
   camera: 900, target: 900, drag: false, startX: 0, startCamera: 0,
-  lastFrame: 0, startTime: performance.now(), prevPhase: null, prevCount: null
+  lastFrame: 0, startTime: performance.now(), prevPhase: null, prevCount: null,
+  journey: null, worldDistance: 0, movingDistance: 0, wheelRotation: 0, travelSpeed: 0
 };
+// World scroll is continuous: scenery does not snap back at the next stop.
+// Velocity follows a smooth acceleration / braking curve, zero at both ends.
+function travelEase(p){return p - Math.sin(2*Math.PI*p)/(2*Math.PI)}
+function startTrainJourney(duration,finish){
+  if(TrainArt.journey?.active)return false;
+  const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const distance=1100;
+  const now=performance.now();
+  TrainArt.journey={active:true,started:now,duration:reduced?300:duration,distance,progress:0,finish};
+  TrainArt.target=trainCameraBounds({wagons:[],phase:'station'}).max;
+  TrainArt.camera=TrainArt.target;
+  return true;
+}
+function updateTrainJourney(now){
+  const j=TrainArt.journey;
+  if(!j||!j.active)return;
+  const p=Math.max(0,Math.min(1,(now-j.started)/j.duration));
+  const d=j.distance*travelEase(p);
+  TrainArt.movingDistance=d;
+  TrainArt.travelSpeed=(1-Math.cos(2*Math.PI*p))*.5;
+  TrainArt.wheelRotation=(TrainArt.worldDistance+d)/15;
+  j.progress=p;
+  if(p>=1){
+    j.active=false;
+    TrainArt.worldDistance+=j.distance;
+    TrainArt.movingDistance=0;
+    TrainArt.travelSpeed=0;
+    const callback=j.finish;
+    TrainArt.journey=null;
+    if(typeof callback==='function')callback();
+  }
+}
+
 const TRAIN_GAP = 274, ENGINE_X = 1500, TRAIN_Y = 348;
 function trainRect(g,x,y,w,h,fill){g.fillStyle=fill;g.fillRect(x,y,w,h)}
 function trainLine(g,x1,y1,x2,y2,color,width=1){g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.lineWidth=width;g.strokeStyle=color;g.stroke()}
@@ -26,7 +60,7 @@ function trainWheel(g,x,y,r){
   trainDisc(g,x,y,r-4,'#68716c');
   trainDisc(g,x,y,r-7,'#22292b');
   trainDisc(g,x,y,5,'#b0a18c');
-  for(let j=0;j<6;j++){const a=Math.PI*j/3;trainLine(g,x+Math.cos(a)*7,y+Math.sin(a)*7,x+Math.cos(a)*(r-6),y+Math.sin(a)*(r-6),'#7c827b',2)}
+  for(let j=0;j<6;j++){const a=Math.PI*j/3+TrainArt.wheelRotation;trainLine(g,x+Math.cos(a)*7,y+Math.sin(a)*7,x+Math.cos(a)*(r-6),y+Math.sin(a)*(r-6),'#7c827b',2)}
 }
 function trainBogie(g,x){
   trainRound(g,x+17,366,85,13,4,'#222b2c','#53605c');
@@ -164,7 +198,13 @@ function trainEngine(g,x,t,state){
   trainRect(g,x+243,321,12,21,'#263b3c');
   for(let i=0;i<4;i++)trainPoly(g,[[x+247,325+i*5],[x+255,325+i*5],[x+255,328+i*5],[x+247,329+i*5]],'#c19a57');
   trainRect(g,x+22,255,23,8,'#353f3e');trainRect(g,x+29,239,8,16,'#293536');
-  for(let i=0;i<5;i++){const xx=x+34+Math.sin(t*.0004+i)*6+i*6;const yy=222-i*12-Math.sin(t*.001+i)*4;trainDisc(g,xx,yy,9+i*3,'rgba(161,164,155,'+(0.17-i*.02)+')')}
+  for(let i=0;i<(TrainArt.journey?.active?9:5);i++){
+    const speed=TrainArt.travelSpeed;
+    const drift=(t*.025*(.2+speed)+i*19)%140;
+    const xx=x+35-drift;
+    const yy=225-i*9-((t*.009+i*13)%26);
+    trainDisc(g,xx,yy,8+i*.75,'rgba(183,185,174,'+(0.10+speed*.11)+')');
+  }
   trainRect(g,x+167,211,77,14,'#2c3435');
   trainRect(g,x+177,205,52,6,'#73807a');
   trainLine(g,x+165,312,x+247,312,'#a4a38c',2);
@@ -175,19 +215,20 @@ function trainEngine(g,x,t,state){
   trainLine(g,x+250,342,x+250,358,'#a19b80',3);
 }
 function trainLandscape(g,t,cam,s){
+  const travel=TrainArt.worldDistance+TrainArt.movingDistance;
   const sky=trainGradient(g,0,0,960,480,['#111e2b','#344754','#8e8275','#b09674','#494f47']);
   trainRect(g,0,0,960,480,sky);
   let glow=g.createRadialGradient(743,116,3,743,116,230);
   glow.addColorStop(0,'rgba(248,198,129,.4)');glow.addColorStop(.5,'rgba(221,169,109,.14)');glow.addColorStop(1,'rgba(192,153,111,0)');
   trainRect(g,0,0,960,400,glow);trainDisc(g,746,123,34,'#d9b78e');
   for(let i=0;i<7;i++){
-    const xx=((i*238-cam*.018+t*.0015)%1480+1480)%1480-270;
+    const xx=((i*238-cam*.018-travel*.014+t*.0015)%1480+1480)%1480-270;
     g.fillStyle='rgba(204,199,177,.075)';
     g.beginPath();g.ellipse(xx,78+(i%3)*34,92+(i%4)*19,14+(i%3)*5,0,0,Math.PI*2);g.fill();
   }
   trainPoly(g,[[0,282],[100,220],[195,261],[309,195],[437,266],[582,210],[715,260],[845,181],[960,268],[960,370],[0,370]],'#465d60');
   trainPoly(g,[[0,320],[170,274],[301,302],[460,250],[570,299],[721,261],[879,284],[960,255],[960,390],[0,390]],'#344b50');
-  const par=(cam*.10+s.distance*7)%132;
+  const par=(cam*.10+s.distance*7+travel*.42)%132;
   for(let i=-2;i<12;i++){
     const n=i+6;const bx=i*132-par;
     const height=54+Math.floor(trainSeed(n+13)*97),wide=51+Math.floor(trainSeed(n+88)*48);
@@ -197,7 +238,7 @@ function trainLandscape(g,t,cam,s){
       trainRect(g,bx+8+c*16,357-height+r*17,6,9,trainSeed(n*13+c+r)>.79?'#aa8661':'#203338');
     }
   }
-  let p=(cam*.22)%186;
+  let p=(cam*.22+travel*.94)%186;
   for(let i=-2;i<8;i++){
     const x=i*186-p;trainLine(g,x+55,292,x+55,363,'#273b3e',5);
     trainLine(g,x+28,301,x+81,301,'#2e4245',4);
@@ -205,11 +246,11 @@ function trainLandscape(g,t,cam,s){
     trainLine(g,x+28,302,x+80,302,'#626760',1);
   }
   trainRect(g,0,351,960,129,trainGradient(g,0,352,960,128,['#505a4f','#323b39','#242b2c']));
-  for(let i=0;i<45;i++){const px=(i*59+trainSeed(i)*47-cam*.42)%1060;const x=(px+1060)%1060-30;const y=364+trainSeed(i*5)*95;
+  for(let i=0;i<45;i++){const px=(i*59+trainSeed(i)*47-cam*.42-travel*1.25)%1060;const x=(px+1060)%1060-30;const y=364+trainSeed(i*5)*95;
     trainLine(g,x,y,x+3+trainSeed(i*3)*11,y-2,'rgba(169,167,135,.22)',1);
   }
   for(let i=-1;i<35;i++){
-    const x=i*35-(cam*.48%35);
+    const x=i*35-((cam*.48+travel*1.65)%35);
     trainPoly(g,[[x,408],[x+19,408],[x+32,463],[x+6,463]],'#564f42');
     trainLine(g,x+4,411,x+25,454,'#7e7060',1);
   }
@@ -218,8 +259,8 @@ function trainLandscape(g,t,cam,s){
   trainRect(g,0,450,960,7,'#212929');
   trainLine(g,0,452,960,452,'#7c8884',2);
   trainLine(g,0,413,960,413,'rgba(13,22,25,.48)',3);
-  if(s.phase==='station'){
-    const platformX=125-((cam*.14)%650);
+  if(s.phase==='station'&&!TrainArt.journey?.active){
+    const platformX=125-((cam*.14+travel*.2)%650);
     trainRect(g,platformX,343,240,11,'#555c56');
     trainRect(g,platformX+12,291,8,50,'#3a4441');
     trainRect(g,platformX+3,282,101,21,'#3b4744');
@@ -250,6 +291,14 @@ function trainOverlay(g,s,cam){
   }
   trainRound(g,14,442,325,26,5,'rgba(15,26,27,.78)');
   trainText(g,'⇆ Тяни мышью или кнопками • осмотр состава',25,460,11,'#c5cabe',500);
+  const journey=TrainArt.journey;
+  if(journey?.active){
+    trainRound(g,344,83,273,64,9,'rgba(23,37,39,.9)','#8b9a81');
+    trainText(g,'ПОЕЗД В ПУТИ',383,108,17,'#efcf9c');
+    trainText(g,'Скорость  '+Math.round(76*TrainArt.travelSpeed)+' км/ч',384,128,12,'#b3cec0',500);
+    trainRect(g,360,136,242,5,'#293e3f');
+    trainRect(g,360,136,242*journey.progress,5,'#d4a56d');
+  }
   if(s.phase==='raid'&&!s.gameover){trainRound(g,360,94,260,36,8,'rgba(96,38,35,.92)','#d69b73');trainText(g,'⚠ НАПАДЕНИЕ МУТАНТОВ',379,117,17,'#ffe1c2')}
   if(s.gameover){trainRect(g,0,0,960,480,'rgba(8,15,17,.79)');trainText(g,'ПОЕЗД ПОТЕРЯН',312,226,36,'#f1b1a2');trainText(g,'Начните новую экспедицию',347,264,17,'#e1dfd2',500)}
 }
@@ -265,11 +314,24 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   g.clearRect(0,0,canvas.width,canvas.height);
   trainLandscape(g,ms,TrainArt.camera,state);
   TrainArt.crewAssignments=assignTrainCrew(state);
+  const speed=TrainArt.travelSpeed;
+  const bump=TrainArt.journey?.active?Math.sin(ms*.07)*speed*1.65:0;
+  g.save();
+  g.translate(0,bump);
   for(let i=state.wagons.length-1;i>=0;i--){
     const x=ENGINE_X-i*TRAIN_GAP-TrainArt.camera;
     if(x<-280||x>980)continue;
     if(i===0)trainEngine(g,x,ms,state);
     else trainWagon(g,state.wagons[i],i,x,state,ms);
+  }
+  g.restore();
+  if(TrainArt.journey?.active){
+    // Near-track dust and streaks are intentionally lightweight (no sprites).
+    for(let i=0;i<18;i++){
+      const x=(i*87+ms*.08*speed)%1120-80;
+      const y=401+(i%4)*11;
+      trainLine(g,x,y,x-10-speed*22,y,'rgba(213,201,163,'+(speed*.17)+')',1+(i%2));
+    }
   }
   trainAttack(g,TrainArt.camera,state,ms);
   trainOverlay(g,state,TrainArt.camera);
@@ -306,6 +368,7 @@ function startTrainView(canvas,getState){
   function frame(ms){
     if(ms-TrainArt.lastFrame>32){
       TrainArt.lastFrame=ms;
+      updateTrainJourney(ms);
       const state=getState();
       if(state.phase==='raid'&&TrainArt.prevPhase!=='raid')TrainArt.target=trainCameraBounds(state).max;
       if(state.wagons.length!==TrainArt.prevCount){
