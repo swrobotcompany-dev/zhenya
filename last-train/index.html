@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Последний поезд — Прототип</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial,sans-serif;background:#101719;color:#e9e9db}
+*{box-sizing:border-box}body{margin:0}header{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 20px;background:#1c292b;border-bottom:2px solid #a97b40}
+h1{font-size:22px;margin:0;color:#f0cd91}small{color:#b0bab3}button{background:#304945;color:#f4efe1;border:1px solid #72907b;border-radius:8px;padding:10px 13px;font-weight:650;cursor:pointer}button:hover:not(:disabled){background:#426258}button:disabled{opacity:.42;cursor:not-allowed}
+main{max-width:1280px;margin:auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px}
+.scene{background:#101d21;border:1px solid #425354;border-radius:12px;overflow:hidden}canvas{display:block;width:100%;height:auto;aspect-ratio: 16 / 8} .info{padding:12px 16px;background:#1a2a2d}
+.panel{background:#1d292b;border:1px solid #495957;border-radius:12px;padding:14px}h2{font-size:17px;color:#f1cb8a;margin:0 0 12px}h3{font-size:14px;margin:12px 0 6px}
+.stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:#273a3b;border-radius:7px;padding:8px 10px;font-size:14px}
+.actions{display:grid;gap:8px}.actions button{text-align:left}.desc{color:#bec8bf;font-size:12px;font-weight:400;display:block;margin-top:3px}
+.wagons{display:flex;gap:6px;flex-wrap:wrap}.wagon{font-size:12px;background:#344c46;padding:6px 8px;border-radius:5px}
+.log{max-height:170px;overflow:auto;color:#c3cfc7;font-size:13px;line-height:1.5}.log p{margin:0 0 6px;border-bottom:1px solid #3b4947;padding-bottom:5px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.danger{background:#673b39;border-color:#b4756c}.good{color:#bce29d}.bad{color:#f3a69a}
+footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
+@media(max-width:800px){main{grid-template-columns:1fr;padding:8px}header{padding:12px}.panel{padding:12px}}
+</style></head>
+<body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
+<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Поезд и окружающий мир"></canvas><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">⚔ Отразить атаку</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
+<div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
+<aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав</h3><div id="wagons" class="wagons"></div></div>
+<div class="panel" style="margin-top:14px"><h2>Строительство</h2><div class="actions" id="buildings"></div></div>
+<div class="panel" style="margin-top:14px"><h2>Улучшения и экипаж</h2><div class="actions" id="upgrades"></div></div></aside></main>
+<footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. Прогресс хранится в браузере.</footer>
+<script>
+'use strict';
+const STORAGE='last_train_save_v1';
+const initial=()=>({day:1,distance:0,phase:'station',fuel:16,food:17,scrap:20,medicine:4,ammo:10,hp:100,crew:4,armor:0,gun:1,wagons:['Локомотив','Жилой'],scavenged:false,attack:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
+const config={farm:{name:'Ферма',cost:15,emoji:'🌿',note:'+4 еды за переход'},med:{name:'Медпункт',cost:18,emoji:'✚',note:'Лечит +8 прочности на переход'},work:{name:'Мастерская',cost:22,emoji:'⚙',note:'+3 металлолома за переход'},guard:{name:'Охранный',cost:25,emoji:'🛡',note:'+2 к силе обороны'}};
+let s;
+try{const saved=JSON.parse(localStorage.getItem(STORAGE));s=saved&&saved.wagons&&Array.isArray(saved.wagons)?{...initial(),...saved}:initial()}catch{s=initial()}
+const $=id=>document.getElementById(id);
+const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const has=name=>s.wagons.includes(name);
+const write=message=>{s.log.unshift('День '+s.day+': '+message);s.log=s.log.slice(0,35)};
+const save=()=>{try{localStorage.setItem(STORAGE,JSON.stringify(s))}catch{}};
+const gain=(name,delta)=>s[name]=Math.max(0,s[name]+delta);
+function checkEnd(){if(s.hp<=0||s.crew<=0){s.gameover=true;s.phase='lost';write('Поезд больше не может продолжать путь. Экспедиция окончена.')} }
+function travel(){
+ if(s.gameover||s.phase!=='station'&&s.phase!=='ready')return;
+ if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
+ gain('fuel',-3);gain('food',-Math.max(1,Math.ceil(s.crew/2)));
+ if(has('Ферма'))gain('food',4);
+ if(has('Мастерская'))gain('scrap',3);
+ if(has('Медпункт'))s.hp=Math.min(100,s.hp+8);
+ if(s.food===0){gain('crew',-1);write('Из-за голода погиб один выживший.')}
+ s.day++;s.distance+=rand(12,24);s.scavenged=false;
+ const roll=Math.random();
+ if(roll<.38){s.phase='raid';s.attack=rand(4,8)+Math.floor(s.distance/35);write('Мутанты на путях! Нужно отразить нападение.')}
+ else{s.phase='station';s.attack=0;write('Найдена заброшенная станция. Можно отправить группу на поиски.');if(roll>.86)event()}
+ checkEnd();render()
+}
+function event(){
+ const n=rand(0,3);
+ if(n===0){gain('fuel',5);write('На станции обнаружили запас дизеля: +5 топлива.')}
+ if(n===1){gain('food',5);write('В кладовой нашли консервы: +5 еды.')}
+ if(n===2){s.hp=Math.max(1,s.hp-8);write('Повреждённые пути: поезд получил 8 урона.')}
+ if(n===3){gain('medicine',2);write('Найден медицинский шкаф: +2 медикамента.')}
+}
+function search(){
+ if(s.phase!=='station'||s.gameover||s.scavenged)return;
+ s.scavenged=true;
+ const scrap=rand(5,12),fuel=rand(2,7),food=rand(1,5);
+ gain('scrap',scrap);gain('fuel',fuel);gain('food',food);
+ let msg='Разведка вернулась: +'+scrap+' металлолома, +'+fuel+' топлива, +'+food+' еды.';
+ if(Math.random()<.28){const meds=rand(1,3);gain('medicine',meds);msg+=' +'+meds+' медикамента.'}
+ if(Math.random()<.20){gain('crew',-1);msg+=' Группа потеряла одного выжившего.'}
+ write(msg);checkEnd();render()
+}
+function defend(){
+ if(s.phase!=='raid'||s.gameover)return;
+ const power=s.crew+2*s.gun+s.armor+(has('Охранный')?2:0);
+ const shots=Math.min(s.ammo,Math.max(1,Math.ceil(s.attack/3)));
+ gain('ammo',-shots);
+ const damage=Math.max(1,(s.attack-power)*5+rand(4,13)-(shots*3));
+ gain('hp',-damage);
+ write('Атака отбита. Израсходовано '+shots+' патронов, повреждения: '+damage+'.');
+ if(s.ammo===0)write('Боеприпасы закончились! Усильте защиту или изготовьте патроны.');
+ s.phase='station';s.attack=0;checkEnd();render()
+}
+function build(id){
+ const b=config[id];if(!b||s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost)return;
+ gain('scrap',-b.cost);s.wagons.push(b.name);write('Построен вагон «'+b.name+'».');render()
+}
+function upgrade(kind){
+ if(s.gameover||s.phase==='raid')return;
+ if(kind==='gun'&&s.scrap>=12){gain('scrap',-12);s.gun++;write('Улучшено оружие: уровень '+s.gun+'.')}
+ else if(kind==='armor'&&s.scrap>=15){gain('scrap',-15);s.armor++;write('Укреплена броня: уровень '+s.armor+'.')}
+ else if(kind==='ammo'&&s.scrap>=6){gain('scrap',-6);gain('ammo',8);write('Изготовлено 8 патронов.')}
+ else if(kind==='heal'&&s.medicine>=2){gain('medicine',-2);s.hp=Math.min(100,s.hp+25);write('Ремонт с помощью медицинской группы и припасов: +25 прочности.')}
+ else if(kind==='recruit'&&s.food>=5&&s.scrap>=8){gain('food',-5);gain('scrap',-8);gain('crew',1);write('Присоединился новый выживший.')}
+ else if(kind==='trade'&&s.scrap>=5){gain('scrap',-5);gain('fuel',6);write('Обмен: 5 металлолома на 6 топлива.')}
+ render()
+}
+function render(){
+ $('headerState').textContent='День '+s.day+' • '+s.distance+' км • '+(s.gameover?'ПОЕЗД ПОТЕРЯН':s.phase==='raid'?'НАПАДЕНИЕ':'СТАНЦИЯ');
+ $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
+ $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
+ $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
+ $('move').disabled=s.gameover||s.phase==='raid';$('search').disabled=s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=s.gameover||s.phase!=='raid';
+ $('buildings').innerHTML=Object.keys(config).map(id=>{const b=config[id];return '<button data-build="'+id+'" '+(s.gameover||s.phase==='raid'||has(b.name)||s.scrap<b.cost?'disabled':'')+'>'+b.emoji+' '+b.name+' · '+(has(b.name)?'Построен':b.cost+' металла')+'<span class="desc">'+b.note+'</span></button>'}).join('');
+ const opts=[['gun','🔫 Улучшить оружие','12 металла',s.scrap>=12],['armor','🛡 Усилить броню','15 металла',s.scrap>=15],['ammo','⚙ Сделать 8 патронов','6 металла',s.scrap>=6],['heal','✚ Починить +25 HP','2 медикамента',s.medicine>=2&&s.hp<100],['recruit','👤 Нанять выжившего','8 металла + 5 еды',s.scrap>=8&&s.food>=5],['trade','⛽ Получить 6 топлива','5 металла',s.scrap>=5]];
+ $('upgrades').innerHTML=opts.map(([id,note,cost,ok])=>'<button data-upgrade="'+id+'" '+(s.gameover||s.phase==='raid'||!ok?'disabled':'')+'>'+note+'<span class="desc">'+cost+'</span></button>').join('');
+ $('log').innerHTML=s.log.map(x=>'<p>'+escapeHtml(x)+'</p>').join('');
+ draw();save()
+}
+function escapeHtml(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const cv=$('world'),ctx=cv.getContext('2d');
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+function circle(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+function textAt(txt,x,y,size=15,color='#e9e6d5'){ctx.fillStyle=color;ctx.font='bold '+size+'px system-ui';ctx.fillText(txt,x,y)}
+function draw(){
+ const w=960,h=480;const sky=ctx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#182a35');sky.addColorStop(.7,'#475258');sky.addColorStop(1,'#947459');rect(0,0,w,h,sky);
+ circle(790,75,37,'#d4b695');circle(790,75,27,'#f0d0a7');
+ for(let i=0;i<9;i++){const x=((i*143+29+s.distance*7)%1200)-140;rect(x,180+(i%3)*15,65,140,'#293d40');for(let j=0;j<4;j++)rect(x+10+j*12,195+(i%3)*15,5,8,'#8b8a6b')}
+ for(let i=0;i<15;i++){const x=(i*77+33)%960;ctx.strokeStyle='#263b3c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x,330);ctx.lineTo(x+randStable(i,12,29),255);ctx.stroke();circle(x+12,259,25,'#263b3c')}
+ rect(0,348,960,132,'#424842');rect(0,386,960,9,'#262b2b');rect(0,431,960,8,'#262b2b');
+ for(let x=0;x<960;x+=38)rect(x,393,16,42,'#675b47');
+ const cars=s.wagons.length;const step=Math.min(143,875/(cars));const start=Math.max(20,960-(cars*step+20))/2;
+ for(let i=0;i<cars;i++){
+ const x=start+i*step;const car=i===0;const bodyColor=car?'#8f563e':['#60796c','#657d63','#84775f','#665d68','#526b7d'][i%5];
+ rect(x,301,step-9,82,bodyColor);rect(x+8,293,step-25,9,'#27393a');
+ if(car){rect(x+18,265,62,38,'#8f563e');rect(x+26,274,35,25,'#91b9b3');rect(x+75,277,16,24,'#303b40');rect(x+8,253,13,40,'#343936');}
+ else{for(let k=0;k<2;k++)rect(x+15+k*(step-20)/2,317,(step-34)/3,28,'#a7b8aa');}
+ rect(x+step-8,351,15,9,'#2f3332');circle(x+22,389,13,'#242a2a');circle(x+step-36,389,13,'#242a2a');
+ if(!car&&i>1)textAt(s.wagons[i].slice(0,9),x+8,365,12,'#f8ecce');
+ }
+ if(s.phase==='station'&&!s.gameover){rect(738,227,13,124,'#4a5147');rect(710,220,100,15,'#9c865d');textAt('СТАНЦИЯ',718,232,13,'#252c2b')}
+ if(s.phase==='raid'&&!s.gameover)for(let i=0;i<Math.min(9,s.attack);i++){const x=650+i*31;circle(x,329-(i%2)*12,13,'#a2a077');rect(x-8,339-(i%2)*12,16,27,'#4d5940');circle(x-5,328-(i%2)*12,2,'#e8a37b');circle(x+5,328-(i%2)*12,2,'#e8a37b')}
+ rect(16,15,280,60,'#18282b');textAt('ПОСЛЕДНИЙ ПОЕЗД',30,40,21,'#ecd09a');textAt('День '+s.day+'   •   '+s.distance+' км',30,62,14);
+ if(s.gameover){rect(0,0,960,480,'#141414bf');textAt('ПОЕЗД ПОТЕРЯН',305,240,38,'#f2b6a2')}
+}
+function randStable(i,a,b){return a+((i*17+23)%(b-a+1))}
+$('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
+$('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
+$('reset').onclick=()=>{if(confirm('Начать новую экспедицию? Текущий прогресс будет удалён.')){s=initial();render()}};
+$('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b.dataset.build)};
+$('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
+window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
+render();
+</script></body></html>
