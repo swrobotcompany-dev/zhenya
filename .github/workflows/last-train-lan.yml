@@ -1,0 +1,21 @@
+name: Last Train LAN co-op checks
+on:
+  push:
+    branches: [igra_zhenya]
+    paths:
+      - 'last-train/**'
+      - '.github/workflows/last-train-lan.yml'
+  workflow_dispatch:
+jobs:
+  lan-server-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: python -m compileall -q last-train/server.py last-train/tests
+      - name: Test LAN co-op HTTP API
+        working-directory: last-train
+        run: python -m unittest discover -s tests -v
