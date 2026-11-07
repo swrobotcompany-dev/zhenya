@@ -264,7 +264,8 @@ function trainLandscape(g,t,cam,s){
     trainRect(g,platformX,343,240,11,'#555c56');
     trainRect(g,platformX+12,291,8,50,'#3a4441');
     trainRect(g,platformX+3,282,101,21,'#3b4744');
-    trainText(g,'СТАНЦИЯ 07',platformX+12,296,12,'#e0c99c');
+    const sign=typeof STATION_TYPES!=='undefined'?(STATION_TYPES[s.stationType]||STATION_TYPES[0]).name:'СТАНЦИЯ';
+    trainText(g,sign.slice(0,15).toUpperCase(),platformX+10,296,11,'#e0c99c');
     trainRect(g,platformX+110,324,33,22,'#514e44');
   }
   for(let i=0;i<55;i++){
@@ -274,7 +275,7 @@ function trainLandscape(g,t,cam,s){
   }
 }
 function trainAttack(g,cam,s,t){
-  drawMutantHorde(g,cam,s,t);
+  drawZombieWave(g,cam,s,t);
 }
 
 function trainOverlay(g,s,cam){
@@ -313,6 +314,12 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   TrainArt.camera+=(TrainArt.target-TrainArt.camera)*.15;
   g.clearRect(0,0,canvas.width,canvas.height);
   trainLandscape(g,ms,TrainArt.camera,state);
+  // Even between combat encounters, infected silhouettes are visible beyond the rails.
+  if(state.phase==='station'&&!state.gameover){
+    drawVariantMutant(g,(state.day+2)%6,852+Math.sin(ms*.0009)*15,344,.39,ms,13+state.day);
+    drawVariantMutant(g,(state.day+4)%6,925+Math.sin(ms*.0011)*11,347,.31,ms,29+state.day);
+    trainText(g,'ЗАРАЖЁННЫЕ ВДАЛИ',755,260,12,'#ded6bf');
+  }
   TrainArt.crewAssignments=assignTrainCrew(state);
   const speed=TrainArt.travelSpeed;
   const bump=TrainArt.journey?.active?Math.sin(ms*.07)*speed*1.65:0;
@@ -337,6 +344,7 @@ function drawTrainScene(g,state,canvas,ms=performance.now()){
   trainOverlay(g,state,TrainArt.camera);
 }
 function panTrain(dir,getState){
+  if(getState().phase==='raid')return;
   const bounds=trainCameraBounds(getState());
   TrainArt.target=trainClamp(TrainArt.target+dir*500,bounds.min,bounds.max);
 }
@@ -349,6 +357,14 @@ function startTrainView(canvas,getState){
   if(right)right.onclick=()=>panTrain(1,getState);
   canvas.addEventListener('pointerdown',event=>{
     if(event.button!==0&&event.pointerType==='mouse')return;
+    const state=getState();
+    if(state.phase==='raid'&&!state.gameover){
+      const bounds=canvas.getBoundingClientRect();
+      const px=(event.clientX-bounds.left)*canvas.width/bounds.width;
+      const py=(event.clientY-bounds.top)*canvas.height/bounds.height;
+      aimZombieOnCanvas(state,px,py);
+      return;
+    }
     TrainArt.drag=true;TrainArt.startX=event.clientX;TrainArt.startCamera=TrainArt.target;
     canvas.setPointerCapture(event.pointerId);
   });
@@ -362,6 +378,7 @@ function startTrainView(canvas,getState){
   canvas.addEventListener('pointercancel',()=>TrainArt.drag=false);
   window.addEventListener('keydown',event=>{
     if(event.target.matches('input,textarea,[contenteditable]'))return;
+    if(getState().phase==='raid')return;
     if(event.code==='ArrowLeft'){event.preventDefault();panTrain(-1,getState)}
     if(event.code==='ArrowRight'){event.preventDefault();panTrain(1,getState)}
   });
@@ -370,6 +387,7 @@ function startTrainView(canvas,getState){
       TrainArt.lastFrame=ms;
       updateTrainJourney(ms);
       const state=getState();
+      if(!document.hidden)updateZombieWave(state,ms);
       if(state.phase==='raid'&&TrainArt.prevPhase!=='raid')TrainArt.target=trainCameraBounds(state).max;
       if(state.wagons.length!==TrainArt.prevCount){
         const bounds=trainCameraBounds(state);
