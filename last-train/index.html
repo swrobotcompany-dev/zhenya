@@ -15,21 +15,37 @@ main{max-width:1280px;margin:auto;padding:16px;display:grid;grid-template-column
 .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.danger{background:#673b39;border-color:#b4756c}.good{color:#bce29d}.bad{color:#f3a69a}
 footer{text-align:center;padding:20px;color:#94a69c;font-size:12px}
 @media(max-width:800px){main{grid-template-columns:1fr;padding:8px}header{padding:12px}.panel{padding:12px}}
-</style></head>
+
+.viewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(90deg,#18282c,#2d3b3c,#18282c);border-top:1px solid #4e5d58}
+.viewbar button{font-size:12px;padding:8px 12px;border-color:#616e62;background:#344445}.viewbar span{font-size:12px;letter-spacing:.025em;color:#c9c3aa;text-align:center}
+.scene{box-shadow:0 13px 34px #060c0c6e}canvas{cursor:grab;touch-action:pan-y;background:#182b32}canvas:active{cursor:grabbing}
+.panel{background:linear-gradient(140deg,#213033,#1a282a);box-shadow:0 8px 20px #0002}
+#stats .stat{background:#2d4241;border:1px solid #42574f}button{transition:background .16s,border-color .16s}
+@media(max-width:650px){.viewbar span{display:none}.viewbar{justify-content:space-between}.viewbar button{flex:1}}
+</style><script src="visuals.js"></script></head>
 <body><header><div><h1>🚂 ПОСЛЕДНИЙ ПОЕЗД</h1><small>Выживание на рельсах • лёгкая браузерная 2D-игра</small></div><div id="headerState"></div></header>
-<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Поезд и окружающий мир"></canvas><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">⚔ Отразить атаку</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
+<main><section><div class="scene"><canvas id="world" width="960" height="480" aria-label="Детализированный поезд и окружающий мир"></canvas><div class="viewbar"><button id="trainTail" type="button">◀ К хвосту состава</button><span>Перетаскивайте поезд мышью или используйте ← →</span><button id="trainFront" type="button">К локомотиву ▶</button></div><div class="info"><div id="status"></div><div class="controls"><button id="move">▶ Продолжить путь</button><button id="search">🔎 Исследовать станцию</button><button id="defend">⚔ Отразить атаку</button><button id="save">💾 Сохранить</button><button id="reset" class="danger">↺ Новая игра</button></div></div></div>
 <div class="panel" style="margin-top:14px"><h2>Журнал экспедиции</h2><div id="log" class="log" aria-live="polite"></div></div></section>
-<aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав</h3><div id="wagons" class="wagons"></div></div>
+<aside><div class="panel"><h2>Состояние поезда</h2><div id="stats" class="stats"></div><h3>Состав <span id="carCount" style="color:#a9b6aa;font-weight:400"></span></h3><div id="wagons" class="wagons"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Строительство</h2><div class="actions" id="buildings"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Улучшения и экипаж</h2><div class="actions" id="upgrades"></div></div></aside></main>
 <footer>Управление: кнопки мышью или клавиши: Пробел — ехать, E — исследовать, F — обороняться. Прогресс хранится в браузере.</footer>
 <script>
 'use strict';
 const STORAGE='last_train_save_v1';
-const initial=()=>({day:1,distance:0,phase:'station',fuel:16,food:17,scrap:20,medicine:4,ammo:10,hp:100,crew:4,armor:0,gun:1,wagons:['Локомотив','Жилой'],scavenged:false,attack:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
+const BASE_TRAIN=['Локомотив','Тендер','Жилой','Пассажирский','Склад','Кухня','Платформа'];
+const initial=()=>({day:1,distance:0,phase:'station',fuel:22,food:23,scrap:20,medicine:4,ammo:10,hp:100,crew:6,armor:0,gun:1,wagons:[...BASE_TRAIN],trainArtVersion:2,scavenged:false,attack:0,gameover:false,log:['Пробуждение. Депо разрушено. На восток ведёт единственный путь.']});
 const config={farm:{name:'Ферма',cost:15,emoji:'🌿',note:'+4 еды за переход'},med:{name:'Медпункт',cost:18,emoji:'✚',note:'Лечит +8 прочности на переход'},work:{name:'Мастерская',cost:22,emoji:'⚙',note:'+3 металлолома за переход'},guard:{name:'Охранный',cost:25,emoji:'🛡',note:'+2 к силе обороны'}};
 let s;
-try{const saved=JSON.parse(localStorage.getItem(STORAGE));s=saved&&saved.wagons&&Array.isArray(saved.wagons)?{...initial(),...saved}:initial()}catch{s=initial()}
+try{
+ const saved=JSON.parse(localStorage.getItem(STORAGE));
+ s=saved&&Array.isArray(saved.wagons)?{...initial(),...saved}:initial();
+ if(saved&&Array.isArray(saved.wagons)&&(!saved.trainArtVersion||saved.trainArtVersion<2)){
+   s.wagons=[...BASE_TRAIN,...saved.wagons.filter(w=>!BASE_TRAIN.includes(w))];
+   s.trainArtVersion=2;
+   s.log.unshift('Состав расширен до '+s.wagons.length+' вагонов — прежний прогресс сохранён.');
+ }
+}catch{s=initial()}
 const $=id=>document.getElementById(id);
 const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 const has=name=>s.wagons.includes(name);
@@ -96,6 +112,7 @@ function upgrade(kind){
 function render(){
  $('headerState').textContent='День '+s.day+' • '+s.distance+' км • '+(s.gameover?'ПОЕЗД ПОТЕРЯН':s.phase==='raid'?'НАПАДЕНИЕ':'СТАНЦИЯ');
  $('stats').innerHTML=[['⛽ Топливо',s.fuel],['🥫 Еда',s.food],['🔩 Металл',s.scrap],['✚ Лекарства',s.medicine],['🔫 Патроны',s.ammo],['❤ Прочность',s.hp+'/100'],['👥 Люди',s.crew],['🛡 Броня',s.armor],['⚔ Оружие',s.gun]].map(([n,v])=>'<div class="stat">'+n+': <b>'+v+'</b></div>').join('');
+ $('carCount').textContent='— '+s.wagons.length+' ед.';
  $('wagons').innerHTML=s.wagons.map((w,i)=>'<div class="wagon">'+(i===0?'🚂 ':i===1?'🏠 ':'🚃 ')+w+'</div>').join('');
  $('status').innerHTML=s.gameover?'<b class="bad">Экспедиция проиграна. Начните новую игру.</b>':s.phase==='raid'?'<b class="bad">⚠ На поезд напали мутанты (угроза '+s.attack+'). Отразите нападение!</b>':'<b class="good">Станция. '+(s.scavenged?'Здесь уже всё исследовано.':'Можно собрать ресурсы.')+'</b> <small>Переход: −3 топлива и −'+Math.max(1,Math.ceil(s.crew/2))+' еды.</small>';
  $('move').disabled=s.gameover||s.phase==='raid';$('search').disabled=s.gameover||s.phase!=='station'||s.scavenged;$('defend').disabled=s.gameover||s.phase!=='raid';
@@ -107,30 +124,7 @@ function render(){
 }
 function escapeHtml(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 const cv=$('world'),ctx=cv.getContext('2d');
-function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
-function circle(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
-function textAt(txt,x,y,size=15,color='#e9e6d5'){ctx.fillStyle=color;ctx.font='bold '+size+'px system-ui';ctx.fillText(txt,x,y)}
-function draw(){
- const w=960,h=480;const sky=ctx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#182a35');sky.addColorStop(.7,'#475258');sky.addColorStop(1,'#947459');rect(0,0,w,h,sky);
- circle(790,75,37,'#d4b695');circle(790,75,27,'#f0d0a7');
- for(let i=0;i<9;i++){const x=((i*143+29+s.distance*7)%1200)-140;rect(x,180+(i%3)*15,65,140,'#293d40');for(let j=0;j<4;j++)rect(x+10+j*12,195+(i%3)*15,5,8,'#8b8a6b')}
- for(let i=0;i<15;i++){const x=(i*77+33)%960;ctx.strokeStyle='#263b3c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x,330);ctx.lineTo(x+randStable(i,12,29),255);ctx.stroke();circle(x+12,259,25,'#263b3c')}
- rect(0,348,960,132,'#424842');rect(0,386,960,9,'#262b2b');rect(0,431,960,8,'#262b2b');
- for(let x=0;x<960;x+=38)rect(x,393,16,42,'#675b47');
- const cars=s.wagons.length;const step=Math.min(143,875/(cars));const start=Math.max(20,960-(cars*step+20))/2;
- for(let i=0;i<cars;i++){
- const x=start+i*step;const car=i===0;const bodyColor=car?'#8f563e':['#60796c','#657d63','#84775f','#665d68','#526b7d'][i%5];
- rect(x,301,step-9,82,bodyColor);rect(x+8,293,step-25,9,'#27393a');
- if(car){rect(x+18,265,62,38,'#8f563e');rect(x+26,274,35,25,'#91b9b3');rect(x+75,277,16,24,'#303b40');rect(x+8,253,13,40,'#343936');}
- else{for(let k=0;k<2;k++)rect(x+15+k*(step-20)/2,317,(step-34)/3,28,'#a7b8aa');}
- rect(x+step-8,351,15,9,'#2f3332');circle(x+22,389,13,'#242a2a');circle(x+step-36,389,13,'#242a2a');
- if(!car&&i>1)textAt(s.wagons[i].slice(0,9),x+8,365,12,'#f8ecce');
- }
- if(s.phase==='station'&&!s.gameover){rect(738,227,13,124,'#4a5147');rect(710,220,100,15,'#9c865d');textAt('СТАНЦИЯ',718,232,13,'#252c2b')}
- if(s.phase==='raid'&&!s.gameover)for(let i=0;i<Math.min(9,s.attack);i++){const x=650+i*31;circle(x,329-(i%2)*12,13,'#a2a077');rect(x-8,339-(i%2)*12,16,27,'#4d5940');circle(x-5,328-(i%2)*12,2,'#e8a37b');circle(x+5,328-(i%2)*12,2,'#e8a37b')}
- rect(16,15,280,60,'#18282b');textAt('ПОСЛЕДНИЙ ПОЕЗД',30,40,21,'#ecd09a');textAt('День '+s.day+'   •   '+s.distance+' км',30,62,14);
- if(s.gameover){rect(0,0,960,480,'#141414bf');textAt('ПОЕЗД ПОТЕРЯН',305,240,38,'#f2b6a2')}
-}
+function draw(){drawTrainScene(ctx,s,cv)}
 function randStable(i,a,b){return a+((i*17+23)%(b-a+1))}
 $('move').onclick=travel;$('search').onclick=search;$('defend').onclick=defend;
 $('save').onclick=()=>{save();write('Сохранение выполнено.');render()};
@@ -139,4 +133,5 @@ $('buildings').onclick=e=>{const b=e.target.closest('[data-build]');if(b)build(b
 $('upgrades').onclick=e=>{const b=e.target.closest('[data-upgrade]');if(b)upgrade(b.dataset.upgrade)};
 window.addEventListener('keydown',e=>{if(['Space','KeyE','KeyF'].includes(e.code)){if(e.target.tagName==='BUTTON')e.target.blur();e.preventDefault();if(e.code==='Space')travel();if(e.code==='KeyE')search();if(e.code==='KeyF')defend()}});
 render();
+startTrainView(cv,()=>s);
 </script></body></html>
