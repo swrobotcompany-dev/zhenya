@@ -63,12 +63,14 @@ function travel(){
  if(TrainArt.journey?.active||s.gameover||(s.phase!=='station'&&s.phase!=='ready'))return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  const journeyKm=rand(12,24);
- if(startTrainJourney(5200,()=>finishTravel(journeyKm))){
+ const destinationType=chooseStation(s.stationType);
+ if(startTrainJourney(5200,()=>finishTravel(journeyKm,destinationType))){
+   TrainArt.journey.destinationType=destinationType;
    write('Состав отправляется со станции. Впереди '+journeyKm+' км пути.');
    render();
  }
 }
-function finishTravel(journeyKm){
+function finishTravel(journeyKm,destinationType){
  if(s.gameover)return;
  if(s.fuel<3){write('Не хватает топлива: нужно 3. Исследуйте станцию или обменяйте металлолом на топливо.');render();return}
  gain('fuel',-3);gain('food',-Math.max(1,Math.ceil(s.crew/2)));
@@ -76,7 +78,7 @@ function finishTravel(journeyKm){
  if(has('Мастерская'))gain('scrap',3);
  if(has('Медпункт'))s.hp=Math.min(100,s.hp+8);
  if(s.food===0){gain('crew',-1);write('Из-за голода погиб один выживший.')}
- s.day++;s.distance+=journeyKm;s.scavenged=false;s.wave=null;s.stationType=chooseStation(s.stationType);
+ s.day++;s.distance+=journeyKm;s.scavenged=false;s.wave=null;s.stationType=destinationType;
  const roll=s.safePassage?1:(s.day===2?0:Math.random());
  s.safePassage=false;
  if(roll<.50){
